@@ -2140,16 +2140,15 @@ function loadPhotoPoints() {
         outFields: ["*"],
         
         // Larger, more visible circles
-        renderer: {
-          type: "simple",
-          symbol: {
-            type: "simple-marker",
-            style: "circle",
-            size: 16,  // Bigger circle
-            color: [255, 128, 0, 0.9],
-            outline: { color: [255, 255, 255], width: 2 }
-          }
-        },
+      renderer: {
+        type: "simple",
+        symbol: {
+          type: "picture-marker",
+          url: "./camera.png",      // <-- put your icon path here
+          width: "18px",
+          height: "18px"
+        }
+      },
         
         featureReduction: null,
         popupEnabled: true,
@@ -2157,73 +2156,304 @@ function loadPhotoPoints() {
         // Custom popup with attachment count and preview
         popupTemplate: {
           title: "תמונות",
-          content: [
-            // Custom content to show attachment count
-            new CustomContent({
-              outFields: ["*"],
-              creator: function(event) {
-                const graphic = event.graphic;
-                const div = document.createElement("div");
-                div.style.cssText = "padding: 10px; text-align: center; font-weight: bold;";
-                
-                // Query attachments to get count
-                graphic.layer.queryAttachments({
-                  objectIds: [graphic.attributes[graphic.layer.objectIdField]],
-                  returnMetadata: true
-                }).then(function(result) {
-                  const attachments = result[graphic.attributes[graphic.layer.objectIdField]] || [];
-                  const count = attachments.length;
+            content: [
+              new CustomContent({
+                outFields: ["*"],
+                creator: function(event) {
+                  const graphic = event.graphic;
+                  const div = document.createElement("div");
+                  div.style.cssText = "padding: 15px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;";
                   
-                  div.innerHTML = `
-                    <div style="
-                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                      color: white;
-                      padding: 12px 20px;
-                      border-radius: 8px;
-                      margin-bottom: 15px;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    ">
-                      <div style="font-size: 24px; font-weight: bold;">${count}</div>
-                      <div style="font-size: 14px; margin-top: 4px;">
-                        ${count === 1 ? 'תמונה' : 'תמונות'}
+                  graphic.layer.queryAttachments({
+                    objectIds: [graphic.attributes[graphic.layer.objectIdField]],
+                    returnMetadata: true
+                  }).then(function(result) {
+                    const attachments = result[graphic.attributes[graphic.layer.objectIdField]] || [];
+                    const count = attachments.length;
+                    let currentIndex = 0;
+                    
+                    div.innerHTML = `
+                      <!-- Header with count badge -->
+                      <div style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 15px;
+                        border-radius: 12px;
+                        margin-bottom: 20px;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                        text-align: center;
+                        position: relative;
+                        overflow: hidden;
+                      ">
+                        <div style="
+                          position: absolute;
+                          top: -50%;
+                          right: -50%;
+                          width: 200%;
+                          height: 200%;
+                          background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+                          animation: shimmer 3s infinite;
+                        "></div>
+                        <div style="font-size: 36px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                          📸 ${count}
+                        </div>
+                        <div style="font-size: 16px; margin-top: 5px; opacity: 0.95;">
+                          ${count === 1 ? 'תמונה זמינה' : 'תמונות זמינות'}
+                        </div>
                       </div>
-                    </div>
-                  `;
-                  
-                  // Show first attachment preview
-                  if (attachments.length > 0) {
-                    const firstAttachment = attachments[0];
-                    div.innerHTML += `
-                      <div style="margin-bottom: 10px;">
-                        <img 
-                          src="${firstAttachment.url}" 
-                          style="
-                            max-width: 100%;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-                            cursor: pointer;
-                          "
-                          onclick="window.open('${firstAttachment.url}', '_blank')"
-                          title="לחץ לפתיחה בחלון חדש"
-                        />
+                      
+                      ${attachments.length > 0 ? `
+                        <!-- Image Viewer Container -->
+                        <div style="position: relative; margin-bottom: 20px;">
+                          <!-- Main Image Display -->
+                          <div id="imageContainer-${graphic.attributes[graphic.layer.objectIdField]}" style="
+                            position: relative;
+                            border-radius: 12px;
+                            overflow: hidden;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+                            background: linear-gradient(45deg, #f3f4f6, #e5e7eb);
+                            min-height: 300px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                          ">
+                            <img 
+                              id="mainImage-${graphic.attributes[graphic.layer.objectIdField]}"
+                              src="${attachments[0].url}" 
+                              style="
+                                width: 100%;
+                                height: auto;
+                                max-height: 500px;
+                                object-fit: contain;
+                                cursor: zoom-in;
+                                transition: transform 0.3s ease;
+                              "
+                              onclick="window.open(this.src, '_blank')"
+                              onmouseover="this.style.transform='scale(1.02)'"
+                              onmouseout="this.style.transform='scale(1)'"
+                            />
+                            
+                            ${attachments.length > 1 ? `
+                              <!-- Navigation Arrows -->
+                              <button 
+                                id="prevBtn-${graphic.attributes[graphic.layer.objectIdField]}"
+                                style="
+                                  position: absolute;
+                                  left: 10px;
+                                  top: 50%;
+                                  transform: translateY(-50%);
+                                  background: rgba(255, 255, 255, 0.95);
+                                  border: none;
+                                  width: 45px;
+                                  height: 45px;
+                                  border-radius: 50%;
+                                  cursor: pointer;
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: center;
+                                  font-size: 20px;
+                                  font-weight: bold;
+                                  color: #667eea;
+                                  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                  transition: all 0.3s ease;
+                                  z-index: 10;
+                                "
+                                onmouseover="this.style.transform='translateY(-50%) scale(1.1)'; this.style.background='#667eea'; this.style.color='white';"
+                                onmouseout="this.style.transform='translateY(-50%) scale(1)'; this.style.background='rgba(255, 255, 255, 0.95)'; this.style.color='#667eea';"
+                              >‹</button>
+                              
+                              <button 
+                                id="nextBtn-${graphic.attributes[graphic.layer.objectIdField]}"
+                                style="
+                                  position: absolute;
+                                  right: 10px;
+                                  top: 50%;
+                                  transform: translateY(-50%);
+                                  background: rgba(255, 255, 255, 0.95);
+                                  border: none;
+                                  width: 45px;
+                                  height: 45px;
+                                  border-radius: 50%;
+                                  cursor: pointer;
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: center;
+                                  font-size: 20px;
+                                  font-weight: bold;
+                                  color: #667eea;
+                                  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                  transition: all 0.3s ease;
+                                  z-index: 10;
+                                "
+                                onmouseover="this.style.transform='translateY(-50%) scale(1.1)'; this.style.background='#667eea'; this.style.color='white';"
+                                onmouseout="this.style.transform='translateY(-50%) scale(1)'; this.style.background='rgba(255, 255, 255, 0.95)'; this.style.color='#667eea';"
+                              >›</button>
+                            ` : ''}
+                            
+                            <!-- Image Counter Badge -->
+                            <div style="
+                              position: absolute;
+                              top: 15px;
+                              right: 15px;
+                              background: rgba(0, 0, 0, 0.7);
+                              color: white;
+                              padding: 8px 12px;
+                              border-radius: 20px;
+                              font-size: 14px;
+                              font-weight: 500;
+                              backdrop-filter: blur(10px);
+                            ">
+                              <span id="imageCounter-${graphic.attributes[graphic.layer.objectIdField]}">1</span> / ${count}
+                            </div>
+                          </div>
+                          
+                          ${attachments.length > 1 ? `
+                            <!-- Thumbnail Strip -->
+                            <div style="
+                              margin-top: 15px;
+                              display: flex;
+                              gap: 10px;
+                              overflow-x: auto;
+                              padding: 10px;
+                              background: rgba(0, 0, 0, 0.03);
+                              border-radius: 8px;
+                              align-items: center;
+                              justify-content: center;
+                            ">
+                              ${attachments.map((att, idx) => `
+                                <div 
+                                  class="thumbnail"
+                                  data-index="${idx}"
+                                  style="
+                                    flex-shrink: 0;
+                                    width: 60px;
+                                    height: 60px;
+                                    border-radius: 8px;
+                                    overflow: hidden;
+                                    cursor: pointer;
+                                    border: 3px solid ${idx === 0 ? '#667eea' : 'transparent'};
+                                    transition: all 0.3s ease;
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                                  "
+                                  onclick="
+                                    // Update main image
+                                    document.getElementById('mainImage-${graphic.attributes[graphic.layer.objectIdField]}').src = '${att.url}';
+                                    document.getElementById('imageCounter-${graphic.attributes[graphic.layer.objectIdField]}').textContent = '${idx + 1}';
+                                    
+                                    // Update thumbnail borders
+                                    this.parentElement.querySelectorAll('.thumbnail').forEach(t => {
+                                      t.style.border = '3px solid transparent';
+                                    });
+                                    this.style.border = '3px solid #667eea';
+                                    
+                                    // Update current index for navigation
+                                    window['currentIndex_${graphic.attributes[graphic.layer.objectIdField]}'] = ${idx};
+                                  "
+                                  onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)';"
+                                  onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)';"
+                                >
+                                  <img 
+                                    src="${att.url}" 
+                                    style="
+                                      width: 100%;
+                                      height: 100%;
+                                      object-fit: cover;
+                                    "
+                                  />
+                                </div>
+                              `).join('')}
+                            </div>
+                          ` : ''}
+                        </div>
+                      ` : `
+                        <!-- No Images Message -->
+                        <div style="
+                          text-align: center;
+                          padding: 40px;
+                          background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+                          border-radius: 12px;
+                          color: #6b7280;
+                        ">
+                          <div style="font-size: 48px; margin-bottom: 10px;">📷</div>
+                          <div style="font-size: 16px;">אין תמונות זמינות</div>
+                        </div>
+                      `}
+                      
+                      <style>
+                        @keyframes shimmer {
+                          0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+                          100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+                        }
+                      </style>
+                    `;
+                    
+                    // Add navigation functionality if there are multiple images
+                    if (attachments.length > 1) {
+                      setTimeout(() => {
+                        window['currentIndex_' + graphic.attributes[graphic.layer.objectIdField]] = 0;
+                        
+                        const prevBtn = document.getElementById('prevBtn-' + graphic.attributes[graphic.layer.objectIdField]);
+                        const nextBtn = document.getElementById('nextBtn-' + graphic.attributes[graphic.layer.objectIdField]);
+                        const mainImage = document.getElementById('mainImage-' + graphic.attributes[graphic.layer.objectIdField]);
+                        const imageCounter = document.getElementById('imageCounter-' + graphic.attributes[graphic.layer.objectIdField]);
+                        const thumbnails = div.querySelectorAll('.thumbnail');
+                        
+                        function updateImage(index) {
+                          mainImage.style.opacity = '0';
+                          setTimeout(() => {
+                            mainImage.src = attachments[index].url;
+                            mainImage.style.opacity = '1';
+                            imageCounter.textContent = index + 1;
+                            
+                            thumbnails.forEach((t, idx) => {
+                              t.style.border = idx === index ? '3px solid #667eea' : '3px solid transparent';
+                            });
+                          }, 200);
+                        }
+                        
+                        mainImage.style.transition = 'opacity 0.2s ease';
+                        
+                        if (prevBtn) {
+                          prevBtn.onclick = function() {
+                            let currentIdx = window['currentIndex_' + graphic.attributes[graphic.layer.objectIdField]];
+                            currentIdx = currentIdx > 0 ? currentIdx - 1 : attachments.length - 1;
+                            window['currentIndex_' + graphic.attributes[graphic.layer.objectIdField]] = currentIdx;
+                            updateImage(currentIdx);
+                          };
+                        }
+                        
+                        if (nextBtn) {
+                          nextBtn.onclick = function() {
+                            let currentIdx = window['currentIndex_' + graphic.attributes[graphic.layer.objectIdField]];
+                            currentIdx = currentIdx < attachments.length - 1 ? currentIdx + 1 : 0;
+                            window['currentIndex_' + graphic.attributes[graphic.layer.objectIdField]] = currentIdx;
+                            updateImage(currentIdx);
+                          };
+                        }
+                      }, 100);
+                    }
+                    
+                  }).catch(function(err) {
+                    console.error("Error querying attachments:", err);
+                    div.innerHTML = `
+                      <div style="
+                        text-align: center;
+                        padding: 20px;
+                        background: #fef2f2;
+                        border-radius: 12px;
+                        color: #dc2626;
+                        border: 1px solid #fca5a5;
+                      ">
+                        <div style="font-size: 24px; margin-bottom: 10px;">⚠️</div>
+                        <div>שגיאה בטעינת תמונות</div>
                       </div>
                     `;
-                  }
-                }).catch(function(err) {
-                  console.error("Error querying attachments:", err);
-                  div.innerHTML = '<div style="color: red;">שגיאה בטעינת תמונות</div>';
-                });
-                
-                return div;
-              }
-            }),
-            
-            // All attachments gallery below
-            {
-              type: "attachments",
-              displayType: "list"  // or "preview" for grid view
-            }
-          ]
+                  });
+                  
+                  return div;
+                }
+              })
+            ]
         }
       });
 
