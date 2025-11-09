@@ -1765,6 +1765,40 @@ document.addEventListener('keydown', function(e) {
       if (v == null) return "NULL";
       return "'" + String(v).replace(/'/g, "''") + "'";
     }
+
+
+// פונקציית עזר חדשה וחכמה
+function formatSqlFilter(layer, fieldName, value) {
+    if (!layer || !fieldName || value == null || value === "") {
+        return null; // קלט לא תקין, אל תיצור פילטר
+    }
+
+    // מצא את השדה ברשימת השדות של השכבה
+    const field = layer.fields?.find(f => f.name === fieldName);
+    
+    // אם השדה לא נמצא, נתייחס אליו כטקסט (למקרה חירום)
+    if (!field) {
+        console.warn(`Field ${fieldName} not found, defaulting to string filter.`);
+        return `${fieldName} = '${String(value).replace(/'/g, "''")}'`;
+    }
+
+    const { type } = field;
+    // רשימת סוגי שדות מספריים נפוצים ב-ESRI
+    const isNumeric = ['integer', 'double', 'small-integer', 'big-integer', 'single', 'long', 'number', 'oid'].includes(type);
+
+    if (isNumeric) {
+        const numVal = Number(value);
+        if (isNaN(numVal)) {
+            console.warn(`Invalid number value "${value}" for numeric field ${fieldName}`);
+            return null; // אל תוסיף פילטר שבור
+        }
+        return `${fieldName} = ${numVal}`; // <-- ללא מרכאות!
+    } else {
+        // אם זה לא מספר, נתייחס כטקסט
+        return `${fieldName} = '${String(value).replace(/'/g, "''")}'`; // <-- עם מרכאות
+    }
+}
+
     function debounce(fn, ms = 200) {
       let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
     }
@@ -2561,22 +2595,22 @@ function getYearRangeFromSelects() {
   return { startY, endY };
 }
 
-function onYearSelectChange() {
+onYearSelectChange = function() {
   const yr = getYearRangeFromSelects();
   if (!yr) return;
 
   // Update the TimeSlider
   if (timeSlider) {
     const start = new Date(yr.startY, 0, 1);
-    const end   = new Date(yr.endY, 11, 31);
+    const end = new Date(yr.endY, 11, 31);
     currentTimeExtent = { start, end };
     timeSlider.timeExtent = currentTimeExtent;
     const datesEl = document.getElementById('timeSliderDates');
     if (datesEl) datesEl.textContent = `${yr.startY} - ${yr.endY}`;
   }
 
-  // This will update both layers
-  applyFilters({ skipExtent: false });
+  // Apply filters with skipRebuild flag
+  applyFilters({ skipExtent: false, skipRebuild: true });
 }
 
 
@@ -2598,39 +2632,58 @@ function resolveFieldsAfterLoad() {
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
     year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
     type:   eventTypeField,
-    // Add forest year field
-    forestYear: firstExisting(featureForest, ["year","Year","YEAR","SURVEY_YEAR"])
+    // חשוב! וודא ששדה year בשכבת היער מזוהה נכון
+    forestYear: firstExisting(featureForest, ["year","Year","YEAR"])
   };
 }
 
 
 
 function buildForestWhere() {
-  // const parts = ["UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL"];
-  const parts = ["1=1"];
+  const parts = [];
+  const filters = getActiveFilters();
   
-  // Add year filter if forest has a year field
-  if (FIELD.forestYear) {
+  // CRITICAL: Filter forest by year field
+  const forestYearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
+  
+  if (forestYearField) {
+    // Check for year range from selects first
     const yr = getYearRangeFromSelects();
     if (yr) {
-      parts.push(`(${FIELD.forestYear} >= ${yr.startY} AND ${FIELD.forestYear} <= ${yr.endY})`);
-    } else if (currentTimeExtent) {
+      parts.push(`${forestYearField} >= ${yr.startY} AND ${forestYearField} <= ${yr.endY}`);
+    } 
+    // Otherwise use TimeSlider extent
+    else if (currentTimeExtent) {
       const startYear = currentTimeExtent.start.getFullYear();
       const endYear = currentTimeExtent.end.getFullYear();
-      parts.push(`(${FIELD.forestYear} >= ${startYear} AND ${FIELD.forestYear} <= ${endYear})`);
+      parts.push(`${forestYearField} >= ${startYear} AND ${forestYearField} <= ${endYear}`);
     }
   }
   
-  // Add other filters if needed (optional - you can filter by selected forest, etc.)
-  const filters = getActiveFilters();
-  if (FIELD.forest && filters.forest) {
-    const forestField = firstExisting(featureForest, ["ForestName", "FOREST"]);
-    if (forestField) {
-      parts.push(`${forestField} = ${sqlString(filters.forest)}`);
-    }
-  }
+  // Add other filters matching the events layer
+  const forestFields = {
+    DistrictName: firstExisting(featureForest, ["DistrictName", "DISTRICT_NAME"]),
+    region: firstExisting(featureForest, ["RegionName", "REGION"]),
+    gush: firstExisting(featureForest, ["ForestGushName", "GUSH"]),
+    forest: firstExisting(featureForest, ["ForestName", "FOREST"]),
+    parcel: firstExisting(featureForest, ["HELKA", "Parcel"]),
+    stand: firstExisting(featureForest, ["STAND_NO", "StandNo"])
+  };
   
-  return parts.length > 1 ? `(${parts[0]}) AND (${parts.slice(1).join(" AND ")})` : parts[0];
+  // השתמש בפונקציה החדשה
+  [
+    formatSqlFilter(featureForest, forestFields.DistrictName, filters.DistrictName),
+    formatSqlFilter(featureForest, forestFields.region, filters.region),
+    formatSqlFilter(featureForest, forestFields.gush, filters.gush),
+    formatSqlFilter(featureForest, forestFields.forest, filters.forest),
+    formatSqlFilter(featureForest, forestFields.parcel, filters.parcel), // <-- מתוקן
+    formatSqlFilter(featureForest, forestFields.stand, filters.stand)    // <-- מתוקן
+  ].forEach(part => {
+    if (part) parts.push(part);
+  });
+  
+  // Return the WHERE clause
+  return parts.length > 0 ? parts.join(" AND ") : "1=1";
 }
 
 
@@ -2645,12 +2698,16 @@ const FILTER_ORDER = [
 
 // Build a WHERE that includes: active event-type, year range/time slider,
 // and only the filters ABOVE a given index (so each dropdown reflects higher choices).
+
+
 function buildWhereForCascading(uptoIndexExclusive) {
   const parts = ["1=1"];
 
   // Event type card
   if (activeEventType?.field && activeEventType?.value) {
-    parts.push(`${activeEventType.field} = ${sqlString(activeEventType.value)}`);
+    // השתמש בפונקציה החדשה
+    const part = formatSqlFilter(featureLayer, activeEventType.field, activeEventType.value);
+    if (part) parts.push(part);
   }
 
   // Year range / time slider
@@ -2670,7 +2727,10 @@ function buildWhereForCascading(uptoIndexExclusive) {
     const { id, fieldKey } = FILTER_ORDER[i];
     const fName = FIELD[fieldKey];
     const val   = filters[id];
-    if (fName && val) parts.push(`${fName} = ${sqlString(val)}`);
+    
+    // השתמש בפונקציה החדשה
+    const part = formatSqlFilter(featureLayer, fName, val);
+    if (part) parts.push(part);
   }
   return parts.join(" AND ");
 }
@@ -2756,7 +2816,7 @@ initializeTimeSlider = async function() {
   await _origInitializeTimeSlider();
   if (timeSlider) {
     timeSlider.watch("timeExtent", debounce(async () => {
-      await rebuildAllFilters();
+      // await rebuildAllFilters();
     }, 250));
   }
 };
@@ -2767,33 +2827,40 @@ function sqlList(values){
   return values.map(v => `'${sqlEscape(v)}'`).join(",");
 }
 
+
 function buildWhere() {
   const f = getActiveFilters();
   const parts = ["1=1"];
 
   if (activeEventType?.field && activeEventType?.value) {
-    parts.push(`${activeEventType.field} = ${sqlString(activeEventType.value)}`);
+    // השתמש בפונקציה החדשה, והעבר את השכבה
+    const part = formatSqlFilter(featureLayer, activeEventType.field, activeEventType.value);
+    if (part) parts.push(part);
   }
 
-//   console.log("Active filters:", f);
+  // דרך נקייה להוסיף את כל הפילטרים
+  [
+    formatSqlFilter(featureLayer, FIELD.DistrictName, f.DistrictName),
+    formatSqlFilter(featureLayer, FIELD.region, f.region),
+    formatSqlFilter(featureLayer, FIELD.forest, f.forest),
+    formatSqlFilter(featureLayer, FIELD.gush, f.gush),
+    formatSqlFilter(featureLayer, FIELD.parcel, f.parcel), // <-- מתוקן
+    formatSqlFilter(featureLayer, FIELD.stand, f.stand)    // <-- מתוקן
+  ].forEach(part => {
+    if (part) parts.push(part); // הוסף רק אם הפילטר תקין
+  });
 
-  if (FIELD.DistrictName && f.DistrictName) parts.push(`${FIELD.DistrictName} = ${sqlString(f.DistrictName)}`);
-  if (FIELD.region && f.region) parts.push(`${FIELD.region} = ${sqlString(f.region)}`);
-  if (FIELD.forest && f.forest) parts.push(`${FIELD.forest} = ${sqlString(f.forest)}`);
-  if (FIELD.gush   && f.gush)   parts.push(`${FIELD.gush}   = ${sqlString(f.gush)}`);
-  if (FIELD.parcel && f.parcel) parts.push(`${FIELD.parcel} = ${sqlString(f.parcel)}`);
-  if (FIELD.stand  && f.stand)  parts.push(`${FIELD.stand}  = ${sqlString(f.stand)}`);
-
-if (FIELD.year) {
-  const yr = getYearRangeFromSelects();
-  if (yr) {
-    parts.push(`(${FIELD.year} >= ${yr.startY} AND ${FIELD.year} <= ${yr.endY})`);
-  } else if (currentTimeExtent) {
-    const startYear = currentTimeExtent.start.getFullYear();
-    const endYear   = currentTimeExtent.end.getFullYear();
-    parts.push(`(${FIELD.year} >= ${startYear} AND ${FIELD.year} <= ${endYear})`);
+  // לוגיקת השנים נשארת כרגיל
+  if (FIELD.year) {
+    const yr = getYearRangeFromSelects();
+    if (yr) {
+      parts.push(`(${FIELD.year} >= ${yr.startY} AND ${FIELD.year} <= ${yr.endY})`);
+    } else if (currentTimeExtent) {
+      const startYear = currentTimeExtent.start.getFullYear();
+      const endYear   = currentTimeExtent.end.getFullYear();
+      parts.push(`(${FIELD.year} >= ${startYear} AND ${FIELD.year} <= ${endYear})`);
+    }
   }
-}
 
   return parts.join(" AND ");
 }
@@ -2801,7 +2868,7 @@ if (FIELD.year) {
 
 async function refreshForestVisibility(where) {
   // const baseForestExpr = "UPDATE_CODE_NAME <> 'נמחק' OR UPDATE_CODE_NAME IS NULL";
-  const baseForestExpr = "UPDATE_CODE_NAME IS NULL";
+  const baseForestExpr = "1=1";
   const chk = document.getElementById('forestLayerToggle');
 
   // If the points layer has no forest field, just hide the polygon layer.
@@ -2827,23 +2894,16 @@ async function refreshForestVisibility(where) {
 
 }
 
-
 async function applyFilters(opts = {}) {
-  const yFrom = document.getElementById('yearFrom');
-  const yTo   = document.getElementById('yearTo');
-  if (yFrom) yFrom.addEventListener('change', onYearSelectChange);
-  if (yTo)   yTo.addEventListener('change',   onYearSelectChange);
-
-  const { skipExtent = false } = opts;
+  const { skipExtent = false, skipRebuild = false } = opts;
   const where = buildWhere();
   
   // Update events layer
   featureLayer.definitionExpression = where;
   
-  // UPDATE FOREST LAYER WITH TIME FILTER
+  // Update forest layer with ALL filters
   const forestWhere = buildForestWhere();
   featureForest.definitionExpression = forestWhere;
-
 
   if (!skipExtent) {
     try {
@@ -2860,7 +2920,7 @@ async function applyFilters(opts = {}) {
     }
   }
 
-  const outFields = ["OBJECTID",FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
+  const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
     .filter(Boolean);
   const result = await featureLayer.queryFeatures({ where, returnGeometry: false, outFields });
 
@@ -2871,10 +2931,12 @@ async function applyFilters(opts = {}) {
   if (panel) panel.style.display = result.features.length ? 'block' : 'none';
 
   await updateEventTypeCountsServer(where);
+  
+  // Only rebuild cascading filters if not skipped
+  // if (!skipRebuild) {
+  //   await rebuildAllFilters();
+  // }
 }
-
-
-
 
 async function initializeEventTypes() {
   if (!FIELD.type) {
@@ -3055,16 +3117,26 @@ timeSlider.watch("timeExtent", (value) => {
   }
 
   const yFrom = document.getElementById('yearFrom');
-  const yTo   = document.getElementById('yearTo');
+  const yTo = document.getElementById('yearTo');
   if (yFrom && yTo) {
     const sy = value.start.getFullYear();
     const ey = value.end.getFullYear();
     yFrom.value = (minYearGlobal != null && sy === Number(minYearGlobal)) ? "" : String(sy);
-    yTo.value   = (maxYearGlobal != null && ey === Number(maxYearGlobal)) ? "" : String(ey);
+    yTo.value = (maxYearGlobal != null && ey === Number(maxYearGlobal)) ? "" : String(ey);
   }
 
-  // This will update both layers
-  applyFilters({ skipExtent: true });
+  // Update BOTH layers with the time filter
+  const eventsWhere = buildWhere();
+  const forestWhere = buildForestWhere();
+  
+  featureLayer.definitionExpression = eventsWhere;
+  featureForest.definitionExpression = forestWhere;
+  
+  // Log for debugging
+  console.log("Forest layer WHERE:", forestWhere);
+  
+  // Continue with other updates
+  applyFilters({ skipExtent: true, skipRebuild: true });
 });
 };
 
