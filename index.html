@@ -824,10 +824,17 @@
                     </div>
                     <div class="legend-content" id="legendContent">
                         <div class="layer-control">
+
+                            <div class="layer-toggle">
+                                <input type="checkbox" id="forestCurrentLayerToggle" checked>
+                                <label for="forestCurrentLayerToggle">שכבת יערות נוכחית</label>
+                            </div>
+                            
                             <div class="layer-toggle">
                                 <input type="checkbox" id="forestLayerToggle" checked>
-                                <label for="forestLayerToggle">שכבת יערות</label>
+                                <label for="forestLayerToggle">שכבת יערות היסטורית</label>
                             </div>
+
                             <div class="layer-toggle">
                                 <input type="checkbox" id="eventsLayerToggle" checked>
                                 <label for="eventsLayerToggle">שכבת אירועים</label>
@@ -1883,8 +1890,8 @@ function formatDateFull(date) {
       portalItem: { id: "ee2a901cd3d44e79bfb9bd718818f5ab" },
       layerId: 0,
       outFields: ["*"],
-      // definitionExpression: "UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL",
-            definitionExpression: "1=1",
+      definitionExpression: "UPDATE_CODE = 'D'",
+            // definitionExpression: "1=1",
 
       labelsVisible: true,
       labelingInfo: [{
@@ -2137,12 +2144,280 @@ uniqueValueInfos: [
       }
     });
 
-    map.addMany([featureForest, featureLayer]);
+
+    
+    featureForestCurrent = new FeatureLayer({
+      portalItem: { id: "ee2a901cd3d44e79bfb9bd718818f5ab" },
+      layerId: 0,
+      outFields: ["*"],
+      definitionExpression: "UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL",
+            // definitionExpression: "1=1",
+
+      labelsVisible: true,
+      labelingInfo: [{
+        symbol: {
+          type: "text",
+          color: [255,255,255,0.9],
+          haloColor: [0,100,0,0.9],
+          haloSize: 2,
+          font: { family: "Arial Unicode MS", size: 12, weight: "bold" }
+        }      }],
+      renderer: {
+        type: "unique-value",
+        field: "COV_TYPE_NAME",
+        defaultSymbol: { type: "simple-fill", color: [200,200,200,0.3], outline: { color: [100,100,100,0.6], width: 1 } },
+
+uniqueValueInfos: [
+                        {
+                            value: "מעורב עצי מחט",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [0, 77, 0, 0.4],
+                                outline: {
+                                    color: [0, 51, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "מעורב עצי מחט"
+                        },
+                        {
+                            value: "אורן ברוטיה",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [0, 102, 0, 0.4],
+                                outline: {
+                                    color: [0, 77, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "אורן ברוטיה"
+                        },
+                        {
+                            value: "אורן ירושלים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [0, 128, 0, 0.4],
+                                outline: {
+                                    color: [0, 102, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "אורן ירושלים"
+                        },
+                        {
+                            value: "רחבי עלים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [34, 139, 34, 0.4],
+                                outline: {
+                                    color: [0, 100, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "רחבי עלים"
+                        },
+                        {
+                            value: "מעורב עצי מחט - רחבי עלים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [60, 179, 113, 0.4],
+                                outline: {
+                                    color: [46, 125, 50, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "מעורב עצי מחט - רחבי עלים"
+                        },
+                        {
+                            value: "ברוש מצוי",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [46, 125, 50, 0.4],
+                                outline: {
+                                    color: [27, 94, 32, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "ברוש מצוי"
+                        },
+                        {
+                            value: "אקליפטוס גומפוצפלה",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [107, 142, 35, 0.4],
+                                outline: {
+                                    color: [85, 107, 47, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "אקליפטוס גומפוצפלה"
+                        },
+                        {
+                            value: "זיתים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [128, 128, 0, 0.4],
+                                outline: {
+                                    color: [107, 107, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "זיתים"
+                        },
+                        {
+                            value: "חרובים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [85, 107, 47, 0.4],
+                                outline: {
+                                    color: [62, 77, 36, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "חרובים"
+                        },
+                        {
+                            value: "אורן גלעין",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [0, 153, 0, 0.4],
+                                outline: {
+                                    color: [0, 128, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "אורן גלעין"
+                        },
+                        {
+                            value: "מעורב רחבי עלים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [144, 238, 144, 0.4],
+                                outline: {
+                                    color: [0, 128, 0, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "מעורב רחבי עלים"
+                        },
+                        {
+                            value: "עצי פרי",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [255, 192, 203, 0.4],
+                                outline: {
+                                    color: [219, 112, 147, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "עצי פרי"
+                        },
+                        {
+                            value: "חורש עד אציל - אלון חולע",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [154, 205, 50, 0.4],
+                                outline: {
+                                    color: [107, 142, 35, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "חורש עד אציל - אלון חולע"
+                        },
+                        {
+                            value: "עצי חורש ארץ ישראלי",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [173, 255, 47, 0.4],
+                                outline: {
+                                    color: [124, 179, 66, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "עצי חורש ארץ ישראלי"
+                        },
+                        {
+                            value: "חורש טבעי דליל",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [189, 183, 107, 0.4],
+                                outline: {
+                                    color: [139, 134, 78, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "חורש טבעי דליל"
+                        },
+                        {
+                            value: "בני שיח עבותיים",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [188, 143, 143, 0.4],
+                                outline: {
+                                    color: [139, 90, 90, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "בני שיח עבותיים"
+                        },
+                        {
+                            value: "אקליפטוס המקור",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [143, 188, 143, 0.4],
+                                outline: {
+                                    color: [107, 142, 107, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "אקליפטוס המקור"
+                        },
+                        {
+                            value: "Other",
+                            symbol: {
+                                type: "simple-fill",
+                                color: [192, 192, 192, 0.3],
+                                outline: {
+                                    color: [128, 128, 128, 0.8],
+                                    width: 2
+                                }
+                            },
+                            label: "Other"
+                        }
+                    ]
+      },
+      popupTemplate: {
+        title: "{ForestName}",
+        content: function (feature) {
+          const a = feature.graphic.attributes;
+          const area = (a.NET_AREA ? Number(a.NET_AREA).toFixed(1)
+                                   : (a.AREA ? Number(a.AREA).toFixed(1)
+                                             : (a.Shape_Area ? (Number(a.Shape_Area)/1000).toFixed(1) : "-")));
+          return "יער: " + (a.ForestName ?? "-")
+            + "<br>גוש: " + (a.ForestGushName ?? "-")
+            + "<br>חלקה: " + (a.HELKA ?? "-")
+            + "<br>עומד: " + (a.STAND_NO ?? "-")
+            + "<br>סוג כיסוי: " + (a.COV_TYPE_NAME ?? "-")
+            + "<br>שטח: " + area + " דונם"
+            + "<br>אזור: " + (a.RegionName ?? a.REGION ?? "-");
+        }
+      }
+    });
+
+
+    map.addMany([featureForest, featureLayer,featureForestCurrent]);
 
     document.getElementById('forestLayerToggle')?.addEventListener('change', (e) => {
     forestLayerManuallyToggled = true;
-    featureForest.visible = e.target.checked;
+    featureForest.visible = e.target.checked; 
     });
+
+
+    document.getElementById('forestCurrentLayerToggle')?.addEventListener('change', (e) => {
+    forestLayerManuallyToggled = true;
+    featureForestCurrent.visible = e.target.checked; 
+    });
+
     document.getElementById('eventsLayerToggle')?.addEventListener('change', (e) => {
       featureLayer.visible = e.target.checked;
     });
