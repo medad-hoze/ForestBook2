@@ -1849,7 +1849,9 @@ function formatDateFull(date) {
       portalItem: { id: "ee2a901cd3d44e79bfb9bd718818f5ab" },
       layerId: 0,
       outFields: ["*"],
-      definitionExpression: "UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL",
+      // definitionExpression: "UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL",
+            definitionExpression: "1=1",
+
       labelsVisible: true,
       labelingInfo: [{
         symbol: {
@@ -2563,7 +2565,7 @@ function onYearSelectChange() {
   const yr = getYearRangeFromSelects();
   if (!yr) return;
 
-  // עדכן גם את ה־TimeSlider
+  // Update the TimeSlider
   if (timeSlider) {
     const start = new Date(yr.startY, 0, 1);
     const end   = new Date(yr.endY, 11, 31);
@@ -2573,9 +2575,9 @@ function onYearSelectChange() {
     if (datesEl) datesEl.textContent = `${yr.startY} - ${yr.endY}`;
   }
 
+  // This will update both layers
   applyFilters({ skipExtent: false });
 }
-
 
 
 
@@ -2594,18 +2596,49 @@ function resolveFieldsAfterLoad() {
     parcel: firstExisting(featureLayer, ["HELKA","Parcel"]),
     stand:  firstExisting(featureLayer, ["STAND_NO","StandNo"]),
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
-    year:   firstExisting(featureLayer, ["year","Year","YEAR"]), // Single year field
-    type:   eventTypeField
+    year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
+    type:   eventTypeField,
+    // Add forest year field
+    forestYear: firstExisting(featureForest, ["year","Year","YEAR","SURVEY_YEAR"])
   };
+}
+
+
+
+function buildForestWhere() {
+  // const parts = ["UPDATE_CODE <> 'D' OR UPDATE_CODE IS NULL"];
+  const parts = ["1=1"];
   
+  // Add year filter if forest has a year field
+  if (FIELD.forestYear) {
+    const yr = getYearRangeFromSelects();
+    if (yr) {
+      parts.push(`(${FIELD.forestYear} >= ${yr.startY} AND ${FIELD.forestYear} <= ${yr.endY})`);
+    } else if (currentTimeExtent) {
+      const startYear = currentTimeExtent.start.getFullYear();
+      const endYear = currentTimeExtent.end.getFullYear();
+      parts.push(`(${FIELD.forestYear} >= ${startYear} AND ${FIELD.forestYear} <= ${endYear})`);
+    }
+  }
+  
+  // Add other filters if needed (optional - you can filter by selected forest, etc.)
+  const filters = getActiveFilters();
+  if (FIELD.forest && filters.forest) {
+    const forestField = firstExisting(featureForest, ["ForestName", "FOREST"]);
+    if (forestField) {
+      parts.push(`${forestField} = ${sqlString(filters.forest)}`);
+    }
+  }
+  
+  return parts.length > 1 ? `(${parts[0]}) AND (${parts.slice(1).join(" AND ")})` : parts[0];
 }
 
 
 const FILTER_ORDER = [
   { id: "DistrictName", fieldKey: "DistrictName" }, // מרחב
   { id: "region",       fieldKey: "region"       }, // אזור
-  { id: "forest",       fieldKey: "forest"       }, // יער
   { id: "gush",         fieldKey: "gush"         }, // גוש
+  { id: "forest",       fieldKey: "forest"       }, // יער
   { id: "parcel",       fieldKey: "parcel"       }, // חלקה
   { id: "stand",        fieldKey: "stand"        }  // עומד
 ];
@@ -2709,7 +2742,7 @@ async function populateFiltersServer() {
 const _origUpdateEventTypeCountsServer = updateEventTypeCountsServer;
 updateEventTypeCountsServer = async function(baseWhere) {
   await _origUpdateEventTypeCountsServer(baseWhere);
-  await rebuildAllFilters();
+  // await rebuildAllFilters();
 };
 
 const _origOnYearSelectChange = onYearSelectChange;
@@ -2767,7 +2800,8 @@ if (FIELD.year) {
 
 
 async function refreshForestVisibility(where) {
-  const baseForestExpr = "UPDATE_CODE_NAME <> 'נמחק' OR UPDATE_CODE_NAME IS NULL";
+  // const baseForestExpr = "UPDATE_CODE_NAME <> 'נמחק' OR UPDATE_CODE_NAME IS NULL";
+  const baseForestExpr = "UPDATE_CODE_NAME IS NULL";
   const chk = document.getElementById('forestLayerToggle');
 
   // If the points layer has no forest field, just hide the polygon layer.
@@ -2795,19 +2829,20 @@ async function refreshForestVisibility(where) {
 
 
 async function applyFilters(opts = {}) {
-
-
-
   const yFrom = document.getElementById('yearFrom');
   const yTo   = document.getElementById('yearTo');
   if (yFrom) yFrom.addEventListener('change', onYearSelectChange);
   if (yTo)   yTo.addEventListener('change',   onYearSelectChange);
 
-
   const { skipExtent = false } = opts;
   const where = buildWhere();
-
+  
+  // Update events layer
   featureLayer.definitionExpression = where;
+  
+  // UPDATE FOREST LAYER WITH TIME FILTER
+  const forestWhere = buildForestWhere();
+  featureForest.definitionExpression = forestWhere;
 
 
   if (!skipExtent) {
@@ -3028,8 +3063,10 @@ timeSlider.watch("timeExtent", (value) => {
     yTo.value   = (maxYearGlobal != null && ey === Number(maxYearGlobal)) ? "" : String(ey);
   }
 
+  // This will update both layers
   applyFilters({ skipExtent: true });
-})};
+});
+};
 
 
 
