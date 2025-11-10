@@ -840,7 +840,7 @@
                                 <label for="eventsLayerToggle">שכבת אירועים</label>
                             </div>
                             <div class="layer-toggle">
-                                <input type="checkbox" id="imagesLayerToggle" checked>
+                                <input type="checkbox" id="imagesLayerToggle" >
                                 <label for="imagesLayerToggle">שכבת תמונות</label>
                             </div>
                         </div>
@@ -2449,6 +2449,7 @@ function loadPhotoPoints() {
         portalItem: { id: "95554845cf784661819992b52b5778f2" },
         layerId: 0,
         outFields: ["*"],
+        visible: false,
         
         // Larger, more visible circles
       renderer: {
@@ -3381,7 +3382,7 @@ async function initializeTimeSlider() {
   timeSlider.timeExtent = { start: minDate, end: maxDate };
   const datesEl = document.getElementById('timeSliderDates');
   if (datesEl) {
-    datesEl.textContent = `${minDate.getFullYear()} - ${maxDate.getFullYear()}`;
+    datesEl.textContent = `${maxDate.getFullYear()} - ${minDate.getFullYear()}`;
   }
 
 timeSlider.watch("timeExtent", (value) => {
