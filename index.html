@@ -3668,7 +3668,7 @@ timeSlider.watch("timeExtent", (value) => {
   currentTimeExtent = value;
   const datesEl = document.getElementById('timeSliderDates');
   if (datesEl) {
-    datesEl.textContent = `${value.start.getFullYear()} - ${value.end.getFullYear()}`;
+    datesEl.textContent = `${value.end.getFullYear()} - ${value.start.getFullYear()}`;
   }
 
   const yFrom = document.getElementById('yearFrom');
