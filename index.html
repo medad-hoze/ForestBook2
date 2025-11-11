@@ -984,12 +984,12 @@
 
                             <div class="layer-toggle">
                                 <input type="checkbox" id="forestCurrentLayerToggle" checked>
-                                <label for="forestCurrentLayerToggle">שכבת יערות נוכחית</label>
+                                <label for="forestCurrentLayerToggle">שכבת עומדים נוכחית</label>
                             </div>
                             
                             <div class="layer-toggle">
                                 <input type="checkbox" id="forestLayerToggle" checked>
-                                <label for="forestLayerToggle">שכבת יערות היסטורית</label>
+                                <label for="forestLayerToggle">שכבת עומדים היסטורית</label>
                             </div>
 
                             <div class="layer-toggle">
@@ -3409,7 +3409,7 @@ async function initializeMainCategories() {
     'מרעה',
     'פיקוח',
     'תכניות יער וממשק',
-    'אירועי פרסלציה',
+    'אירועי פרצלציה',
     'סקרים',
     'טיפולים ביער',
     'הקמת יער'
@@ -3420,7 +3420,7 @@ async function initializeMainCategories() {
     card.className = 'event-type-card';
     card.innerHTML = `<div class="event-type-name">${categoryName}</div>`;
     card.onclick = () => {
-      if (categoryName === 'אירועי פרסלציה') {
+      if (categoryName === 'אירועי פרצלציה') {
         // Navigate to dynamic event types
         initializeDynamicEventTypes();
       } else {
@@ -3446,7 +3446,7 @@ async function initializeSubCategories() {
     'מרעה',
     'פיקוח',
     'תכניות יער וממשק',
-    'אירועי פרסלציה',
+    'אירועי פרצלציה',
     'סקרים',
     'טיפולים ביער',
     'הקמת יער'
@@ -3457,7 +3457,7 @@ async function initializeSubCategories() {
     card.className = 'event-type-card';
     card.innerHTML = `<div class="event-type-name">${categoryName}</div>`;
     card.onclick = () => {
-      if (categoryName === 'אירועי פרסלציה') {
+      if (categoryName === 'אירועי פרצלציה') {
         // Navigate to dynamic event types
         initializeDynamicEventTypes();
       } else {
