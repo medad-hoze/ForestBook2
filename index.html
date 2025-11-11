@@ -1570,7 +1570,7 @@ function createNetworkVisualization(data) {
                     highlight: isNetwork2 ? '#2980b9' : '#34495e',
                     hover: isNetwork2 ? '#2980b9' : '#34495e'
                 },
-                dashes: isNetwork2, // Dashed lines for network 2
+                dashes: isNetwork2, 
                 smooth: { 
                     type: 'cubicBezier', 
                     forceDirection: 'horizontal', 
@@ -1634,7 +1634,6 @@ function createNetworkVisualization(data) {
         }
     };
 
-    // Add loading indicator
     const prog = document.createElement('div');
     prog.style.cssText = `
         position:absolute; top:8px; left:8px; background:#ffffffcc; padding:6px 8px;
@@ -1654,7 +1653,6 @@ function createNetworkVisualization(data) {
         network.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } });
     });
 
-    // Render legend for both networks
     renderCombinedLegend(Array.from(covSeen), network1Count > 0, network2Count > 0);
 }
 
@@ -1675,7 +1673,6 @@ function renderCombinedLegend(covList, hasNetwork1, hasNetwork2) {
     
     let legendHTML = '';
     
-    // Add network indicators
     if (hasNetwork1 && hasNetwork2) {
         legendHTML += '<div style="width:100%;font-weight:bold;margin-bottom:5px;">סימון רשתות:</div>';
         legendHTML += '<span style="display:flex;align-items:center;gap:6px;">';
@@ -1685,7 +1682,6 @@ function renderCombinedLegend(covList, hasNetwork1, hasNetwork2) {
         legendHTML += '<div style="width:100%;height:1px;background:#ddd;margin:5px 0;"></div>';
     }
     
-    // Add COV types for network 1
     if (covList.length > 0) {
         legendHTML += '<div style="width:100%;font-weight:bold;margin-bottom:5px;">סוגי כיסוי (רשת 1):</div>';
         legendHTML += covList.slice(0, 14).map(c => {
@@ -1700,9 +1696,7 @@ function renderCombinedLegend(covList, hasNetwork1, hasNetwork2) {
     legend.innerHTML = legendHTML;
 }
 
-// Helper function for Network 2 colors (since it doesn't have COV_TYPE)
 function getNetwork2Color(keyNum) {
-    // Generate color based on key number hash
     const colors = [
         '#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
         '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#16a085'
@@ -1911,7 +1905,6 @@ document.addEventListener('keydown', function(e) {
     "esri/widgets/TimeSlider"
   ], function (Map, MapView, FeatureLayer, Search, TimeSlider) {
 
-    // ---------- State ----------
     let featureLayer, featureForest;
     let activeEventType = null;   
     let eventTypeField = null;
@@ -1952,35 +1945,30 @@ document.addEventListener('keydown', function(e) {
     }
 
 
-// פונקציית עזר חדשה וחכמה
 function formatSqlFilter(layer, fieldName, value) {
     if (!layer || !fieldName || value == null || value === "") {
-        return null; // קלט לא תקין, אל תיצור פילטר
+        return null; 
     }
 
-    // מצא את השדה ברשימת השדות של השכבה
     const field = layer.fields?.find(f => f.name === fieldName);
     
-    // אם השדה לא נמצא, נתייחס אליו כטקסט (למקרה חירום)
     if (!field) {
         console.warn(`Field ${fieldName} not found, defaulting to string filter.`);
         return `${fieldName} = '${String(value).replace(/'/g, "''")}'`;
     }
 
     const { type } = field;
-    // רשימת סוגי שדות מספריים נפוצים ב-ESRI
     const isNumeric = ['integer', 'double', 'small-integer', 'big-integer', 'single', 'long', 'number', 'oid'].includes(type);
 
     if (isNumeric) {
         const numVal = Number(value);
         if (isNaN(numVal)) {
             console.warn(`Invalid number value "${value}" for numeric field ${fieldName}`);
-            return null; // אל תוסיף פילטר שבור
+            return null; 
         }
-        return `${fieldName} = ${numVal}`; // <-- ללא מרכאות!
+        return `${fieldName} = ${numVal}`; 
     } else {
-        // אם זה לא מספר, נתייחס כטקסט
-        return `${fieldName} = '${String(value).replace(/'/g, "''")}'`; // <-- עם מרכאות
+        return `${fieldName} = '${String(value).replace(/'/g, "''")}'`; 
     }
 }
 
@@ -2607,7 +2595,6 @@ uniqueValueInfos: [
 
 // #################################################################  pics 
 
-// simple cache so we don't re-query the same OID
 function loadPhotoPoints() {
   require([
     "esri/layers/FeatureLayer",
@@ -2629,12 +2616,11 @@ function loadPhotoPoints() {
         outFields: ["*"],
         visible: false,
         
-        // Larger, more visible circles
       renderer: {
         type: "simple",
         symbol: {
           type: "picture-marker",
-          url: "./camera.png",      // <-- put your icon path here
+          url: "./camera.png",     
           width: "18px",
           height: "18px"
         }
@@ -2643,7 +2629,6 @@ function loadPhotoPoints() {
         featureReduction: null,
         popupEnabled: true,
         
-        // Custom popup with attachment count and preview
         popupTemplate: {
           title: "תמונות",
             content: [
@@ -3325,15 +3310,6 @@ async function refreshForestVisibility(where) {
   const baseForestExpr = "1=1";
   const chk = document.getElementById('forestLayerToggle');
 
-  // If the points layer has no forest field, just hide the polygon layer.
-  // if (!FIELD.forest) {
-  //   featureForest.visible = false;
-  //   if (chk) chk.checked = false;
-  //   featureForest.definitionExpression = baseForestExpr;
-  //   return;
-  // }
-
-  // Get distinct forest names from the filtered points
   const res = await featureLayer.queryFeatures({
     where,
     outFields: [FIELD.forest],
@@ -3933,35 +3909,27 @@ function handleFilterChange(column, dropdown) {
   const valueCheckboxes = dropdown.querySelectorAll('input[type="checkbox"]:not([data-value="all"])');
 
   if (allCheckbox && allCheckbox.checked) {
-    // If "Select All" is checked, uncheck it and check all others
     allCheckbox.checked = false;
     valueCheckboxes.forEach(cb => cb.checked = true);
   }
 
-  // Get selected values
   const selectedValues = Array.from(valueCheckboxes)
     .filter(cb => cb.checked)
     .map(cb => cb.getAttribute('data-value'));
 
-  // Update filters
   if (selectedValues.length === valueCheckboxes.length) {
-    // All selected = no filter
     delete columnFilters[column];
   } else if (selectedValues.length === 0) {
-    // None selected = show nothing
     columnFilters[column] = [];
   } else {
     columnFilters[column] = selectedValues;
   }
 
-  // Update icon appearance
   updateFilterIcon(column);
 
-  // Apply filters
   applyFiltersAndRender();
 }
 
-// Update filter icon appearance
 function updateFilterIcon(column) {
   const icon = document.querySelector(`.filter-icon[data-column="${column}"]`);
   if (icon) {
@@ -3973,7 +3941,6 @@ function updateFilterIcon(column) {
   }
 }
 
-// Close filter dropdown
 function closeFilterDropdown() {
   const dropdown = document.getElementById('active-filter-dropdown');
   if (dropdown) {
@@ -3982,15 +3949,13 @@ function closeFilterDropdown() {
   activeDropdown = null;
 }
 
-// Apply filters and re-render table
 function applyFiltersAndRender(features = null) {
   const featuresToFilter = features || currentTableFeatures;
 
-  // Apply filters
   let filteredFeatures = featuresToFilter.filter(feature => {
     for (const column in columnFilters) {
       const filterValues = columnFilters[column];
-      if (filterValues.length === 0) return false; // No values selected = hide all
+      if (filterValues.length === 0) return false; 
 
       const fieldName = currentTableFIELD[column];
       if (!fieldName) continue;
@@ -4018,7 +3983,6 @@ function applyFiltersAndRender(features = null) {
   updateSummary(filteredFeatures, currentTableFIELD);
 }
 
-// Separate render function
 function renderInfoTable(features, FIELD) {
   const tbody = document.getElementById('infoTableBody');
   if (!tbody) return;
@@ -4026,7 +3990,7 @@ function renderInfoTable(features, FIELD) {
 
   if (!features.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">אין נתונים להצגה</td></tr>';
-    updateSummary([], FIELD); // Update summary with empty data
+    updateSummary([], FIELD);
     return;
   }
 
@@ -4069,44 +4033,35 @@ function renderInfoTable(features, FIELD) {
   });
 }
 
-// Main updateInfoTable function
 function updateInfoTable(features, FIELD) {
-  // Store features and FIELD for sorting
   currentTableFeatures = features;
   currentTableFIELD = FIELD;
 
-  // Reset sort state when data changes
   currentSortColumn = null;
   currentSortDirection = null;
 
-  // Reset filter state when data changes
   columnFilters = {};
 
-  // Clear sort indicators
   const headers = document.querySelectorAll('.sortable-header');
   headers.forEach(h => {
     h.classList.remove('sorted-asc', 'sorted-desc');
   });
 
-  // Clear filter indicators
   const filterIcons = document.querySelectorAll('.filter-icon');
   filterIcons.forEach(icon => {
     icon.classList.remove('active');
   });
 
-  // Initialize sorting listeners (only once)
   if (!window.tableSortingInitialized) {
     initializeTableSorting();
     window.tableSortingInitialized = true;
   }
 
-  // Initialize filtering listeners (only once)
   if (!window.tableFilteringInitialized) {
     initializeTableFiltering();
     window.tableFilteringInitialized = true;
   }
 
-  // Render the table and summary
   renderInfoTable(features, FIELD);
   updateSummary(features, FIELD);
 }
@@ -4189,7 +4144,6 @@ function updateInfoTable(features, FIELD) {
         await initializeTimeSlider();
         await applyFilters();
       } catch (e) {
-        // console.error(e);
         showError("שגיאה בטעינת הנתונים");
       } finally {
         const loading = document.getElementById('loading');
