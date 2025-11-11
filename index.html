@@ -453,6 +453,82 @@
             font-size: 0.8em;
         }
 
+        .filter-icon {
+            cursor: pointer;
+            font-size: 0.7em;
+            margin-left: 5px;
+            padding: 2px 5px;
+            color: #666;
+            transition: color 0.2s;
+        }
+
+        .filter-icon:hover {
+            color: #2d6a4f;
+            background: rgba(45, 106, 79, 0.1);
+            border-radius: 3px;
+        }
+
+        .filter-icon.active {
+            color: #2d6a4f;
+            font-weight: bold;
+        }
+
+        .filter-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .filter-dropdown.show {
+            display: block;
+        }
+
+        .filter-option {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-option:hover {
+            background: #f5f5f5;
+        }
+
+        .filter-option input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .filter-option.all-option {
+            font-weight: bold;
+            background: #f9f9f9;
+            border-bottom: 2px solid #2d6a4f;
+        }
+
+        .filter-clear-btn {
+            padding: 8px 12px;
+            background: #f44336;
+            color: white;
+            text-align: center;
+            cursor: pointer;
+            font-weight: bold;
+            border-top: 2px solid #d32f2f;
+        }
+
+        .filter-clear-btn:hover {
+            background: #d32f2f;
+        }
+
         .time-slider-container {
             position: fixed;
             bottom: 0;
@@ -984,13 +1060,34 @@
                 <table class="info-table">
                     <thead>
                         <tr>
-                            <th data-column="stand" class="sortable-header" title="לחץ פעמיים למיון">עומד</th>
-                            <th data-column="parcel" class="sortable-header" title="לחץ פעמיים למיון">חלקה</th>
-                            <th data-column="gush" class="sortable-header" title="לחץ פעמיים למיון">גוש</th>
-                            <th data-column="forest" class="sortable-header" title="לחץ פעמיים למיון">יער</th>
-                            <th data-column="area" class="sortable-header" title="לחץ פעמיים למיון">שטח (דונם)</th>
-                            <th data-column="year" class="sortable-header" title="לחץ פעמיים למיון">תאריך</th>
-                            <th data-column="type" class="sortable-header" title="לחץ פעמיים למיון">אירוע</th>
+                            <th data-column="stand" class="sortable-header" title="לחץ פעמיים למיון">
+                                עומד
+                                <span class="filter-icon" data-column="stand" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="parcel" class="sortable-header" title="לחץ פעמיים למיון">
+                                חלקה
+                                <span class="filter-icon" data-column="parcel" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="gush" class="sortable-header" title="לחץ פעמיים למיון">
+                                גוש
+                                <span class="filter-icon" data-column="gush" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="forest" class="sortable-header" title="לחץ פעמיים למיון">
+                                יער
+                                <span class="filter-icon" data-column="forest" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="area" class="sortable-header" title="לחץ פעמיים למיון">
+                                שטח (דונם)
+                                <span class="filter-icon" data-column="area" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="year" class="sortable-header" title="לחץ פעמיים למיון">
+                                תאריך
+                                <span class="filter-icon" data-column="year" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="type" class="sortable-header" title="לחץ פעמיים למיון">
+                                אירוע
+                                <span class="filter-icon" data-column="type" title="לחץ לסינון">▼</span>
+                            </th>
                         </tr>
                     </thead>
                     <tbody id="infoTableBody">
@@ -3452,11 +3549,13 @@ timeSlider.watch("timeExtent", (value) => {
 
 
 
-// Global variables for table sorting
+// Global variables for table sorting and filtering
 let currentTableFeatures = [];
 let currentTableFIELD = null;
 let currentSortColumn = null;
 let currentSortDirection = null;
+let columnFilters = {}; // Store selected filters for each column
+let activeDropdown = null;
 
 // Initialize table header event listeners for sorting
 function initializeTableSorting() {
@@ -3538,8 +3637,223 @@ function sortTable(column) {
     });
   }
 
-  // Re-render table without changing stored features
-  renderInfoTable(sortedFeatures, currentTableFIELD);
+  // Apply filters and re-render
+  applyFiltersAndRender(sortedFeatures);
+}
+
+// Initialize filter icon listeners
+function initializeTableFiltering() {
+  const filterIcons = document.querySelectorAll('.filter-icon');
+  filterIcons.forEach(icon => {
+    icon.addEventListener('click', function(e) {
+      e.stopPropagation(); // Prevent triggering header click
+      const column = this.getAttribute('data-column');
+      toggleFilterDropdown(column, this);
+    });
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', function(e) {
+    if (activeDropdown && !e.target.closest('.filter-dropdown') && !e.target.closest('.filter-icon')) {
+      closeFilterDropdown();
+    }
+  });
+}
+
+// Get unique values for a column
+function getUniqueColumnValues(column, features, FIELD) {
+  if (!features.length || !FIELD) return [];
+
+  const fieldName = FIELD[column];
+  if (!fieldName) return [];
+
+  const uniqueValues = new Set();
+
+  features.forEach(f => {
+    const a = f.attributes;
+    let value;
+
+    if (column === 'area') {
+      const v = Number(a[fieldName]);
+      value = isFinite(v) ? v.toFixed(1) : '-';
+    } else if (column === 'year') {
+      value = formatDateShort(a[fieldName]);
+    } else {
+      value = a[fieldName] ?? '-';
+    }
+
+    uniqueValues.add(String(value));
+  });
+
+  return Array.from(uniqueValues).sort();
+}
+
+// Toggle filter dropdown
+function toggleFilterDropdown(column, icon) {
+  // Close existing dropdown
+  if (activeDropdown) {
+    closeFilterDropdown();
+  }
+
+  // If clicking the same icon, just close
+  if (activeDropdown === column) {
+    activeDropdown = null;
+    return;
+  }
+
+  // Create dropdown
+  const dropdown = document.createElement('div');
+  dropdown.className = 'filter-dropdown show';
+  dropdown.id = 'active-filter-dropdown';
+
+  // Get unique values
+  const uniqueValues = getUniqueColumnValues(column, currentTableFeatures, currentTableFIELD);
+
+  if (!uniqueValues.length) {
+    dropdown.innerHTML = '<div class="filter-option">אין ערכים זמינים</div>';
+  } else {
+    // Add "Select All" option
+    const allChecked = !columnFilters[column] || columnFilters[column].length === 0;
+    dropdown.innerHTML = `
+      <div class="filter-option all-option" data-value="all">
+        <input type="checkbox" ${allChecked ? 'checked' : ''} id="filter-all-${column}">
+        <label for="filter-all-${column}">(בחר הכל)</label>
+      </div>
+    `;
+
+    // Add individual options
+    uniqueValues.forEach(value => {
+      const isChecked = !columnFilters[column] || columnFilters[column].length === 0 || columnFilters[column].includes(value);
+      const optionId = `filter-${column}-${value.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+      const option = document.createElement('div');
+      option.className = 'filter-option';
+      option.innerHTML = `
+        <input type="checkbox" ${isChecked ? 'checked' : ''} id="${optionId}" data-value="${value}">
+        <label for="${optionId}">${value}</label>
+      `;
+      dropdown.appendChild(option);
+    });
+
+    // Add clear filters button
+    if (columnFilters[column] && columnFilters[column].length > 0) {
+      const clearBtn = document.createElement('div');
+      clearBtn.className = 'filter-clear-btn';
+      clearBtn.textContent = 'נקה סינון';
+      clearBtn.onclick = () => {
+        delete columnFilters[column];
+        updateFilterIcon(column);
+        closeFilterDropdown();
+        applyFiltersAndRender();
+      };
+      dropdown.appendChild(clearBtn);
+    }
+
+    // Handle checkbox changes
+    dropdown.addEventListener('change', function(e) {
+      if (e.target.type === 'checkbox') {
+        handleFilterChange(column, dropdown);
+      }
+    });
+  }
+
+  // Position dropdown relative to the header
+  const th = icon.closest('th');
+  th.style.position = 'relative';
+  th.appendChild(dropdown);
+
+  activeDropdown = column;
+}
+
+// Handle filter checkbox changes
+function handleFilterChange(column, dropdown) {
+  const allCheckbox = dropdown.querySelector('[data-value="all"]');
+  const valueCheckboxes = dropdown.querySelectorAll('input[type="checkbox"]:not([data-value="all"])');
+
+  if (allCheckbox && allCheckbox.checked) {
+    // If "Select All" is checked, uncheck it and check all others
+    allCheckbox.checked = false;
+    valueCheckboxes.forEach(cb => cb.checked = true);
+  }
+
+  // Get selected values
+  const selectedValues = Array.from(valueCheckboxes)
+    .filter(cb => cb.checked)
+    .map(cb => cb.getAttribute('data-value'));
+
+  // Update filters
+  if (selectedValues.length === valueCheckboxes.length) {
+    // All selected = no filter
+    delete columnFilters[column];
+  } else if (selectedValues.length === 0) {
+    // None selected = show nothing
+    columnFilters[column] = [];
+  } else {
+    columnFilters[column] = selectedValues;
+  }
+
+  // Update icon appearance
+  updateFilterIcon(column);
+
+  // Apply filters
+  applyFiltersAndRender();
+}
+
+// Update filter icon appearance
+function updateFilterIcon(column) {
+  const icon = document.querySelector(`.filter-icon[data-column="${column}"]`);
+  if (icon) {
+    if (columnFilters[column] && columnFilters[column].length > 0) {
+      icon.classList.add('active');
+    } else {
+      icon.classList.remove('active');
+    }
+  }
+}
+
+// Close filter dropdown
+function closeFilterDropdown() {
+  const dropdown = document.getElementById('active-filter-dropdown');
+  if (dropdown) {
+    dropdown.remove();
+  }
+  activeDropdown = null;
+}
+
+// Apply filters and re-render table
+function applyFiltersAndRender(features = null) {
+  const featuresToFilter = features || currentTableFeatures;
+
+  // Apply filters
+  let filteredFeatures = featuresToFilter.filter(feature => {
+    for (const column in columnFilters) {
+      const filterValues = columnFilters[column];
+      if (filterValues.length === 0) return false; // No values selected = hide all
+
+      const fieldName = currentTableFIELD[column];
+      if (!fieldName) continue;
+
+      const a = feature.attributes;
+      let value;
+
+      if (column === 'area') {
+        const v = Number(a[fieldName]);
+        value = isFinite(v) ? v.toFixed(1) : '-';
+      } else if (column === 'year') {
+        value = formatDateShort(a[fieldName]);
+      } else {
+        value = a[fieldName] ?? '-';
+      }
+
+      if (!filterValues.includes(String(value))) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  renderInfoTable(filteredFeatures, currentTableFIELD);
+  updateSummary(filteredFeatures, currentTableFIELD);
 }
 
 // Separate render function
@@ -3550,6 +3864,7 @@ function renderInfoTable(features, FIELD) {
 
   if (!features.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">אין נתונים להצגה</td></tr>';
+    updateSummary([], FIELD); // Update summary with empty data
     return;
   }
 
@@ -3602,10 +3917,19 @@ function updateInfoTable(features, FIELD) {
   currentSortColumn = null;
   currentSortDirection = null;
 
+  // Reset filter state when data changes
+  columnFilters = {};
+
   // Clear sort indicators
   const headers = document.querySelectorAll('.sortable-header');
   headers.forEach(h => {
     h.classList.remove('sorted-asc', 'sorted-desc');
+  });
+
+  // Clear filter indicators
+  const filterIcons = document.querySelectorAll('.filter-icon');
+  filterIcons.forEach(icon => {
+    icon.classList.remove('active');
   });
 
   // Initialize sorting listeners (only once)
@@ -3614,8 +3938,15 @@ function updateInfoTable(features, FIELD) {
     window.tableSortingInitialized = true;
   }
 
-  // Render the table
+  // Initialize filtering listeners (only once)
+  if (!window.tableFilteringInitialized) {
+    initializeTableFiltering();
+    window.tableFilteringInitialized = true;
+  }
+
+  // Render the table and summary
   renderInfoTable(features, FIELD);
+  updateSummary(features, FIELD);
 }
 
     function updateSummary(features, FIELD) {
