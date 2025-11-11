@@ -432,7 +432,27 @@
             font-weight: bold;
             color: #2d6a4f;
         }
-        
+
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+
+        .sortable-header:hover {
+            background: #e8f5e9 !important;
+        }
+
+        .sortable-header.sorted-asc::after {
+            content: ' ▲';
+            font-size: 0.8em;
+        }
+
+        .sortable-header.sorted-desc::after {
+            content: ' ▼';
+            font-size: 0.8em;
+        }
+
         .time-slider-container {
             position: fixed;
             bottom: 0;
@@ -964,13 +984,13 @@
                 <table class="info-table">
                     <thead>
                         <tr>
-                            <th>עומד</th>
-                            <th>חלקה</th>
-                            <th>גוש</th>
-                            <th>יער</th>
-                            <th>שטח (דונם)</th>
-                            <th>תאריך</th>
-                            <th>אירוע</th>
+                            <th data-column="stand" class="sortable-header" title="לחץ פעמיים למיון">עומד</th>
+                            <th data-column="parcel" class="sortable-header" title="לחץ פעמיים למיון">חלקה</th>
+                            <th data-column="gush" class="sortable-header" title="לחץ פעמיים למיון">גוש</th>
+                            <th data-column="forest" class="sortable-header" title="לחץ פעמיים למיון">יער</th>
+                            <th data-column="area" class="sortable-header" title="לחץ פעמיים למיון">שטח (דונם)</th>
+                            <th data-column="year" class="sortable-header" title="לחץ פעמיים למיון">תאריך</th>
+                            <th data-column="type" class="sortable-header" title="לחץ פעמיים למיון">אירוע</th>
                         </tr>
                     </thead>
                     <tbody id="infoTableBody">
@@ -3432,7 +3452,98 @@ timeSlider.watch("timeExtent", (value) => {
 
 
 
-function updateInfoTable(features, FIELD) {
+// Global variables for table sorting
+let currentTableFeatures = [];
+let currentTableFIELD = null;
+let currentSortColumn = null;
+let currentSortDirection = null;
+
+// Initialize table header event listeners for sorting
+function initializeTableSorting() {
+  const headers = document.querySelectorAll('.sortable-header');
+  headers.forEach(header => {
+    header.addEventListener('dblclick', function() {
+      const column = this.getAttribute('data-column');
+      sortTable(column);
+    });
+  });
+}
+
+// Sort table by column
+function sortTable(column) {
+  if (!currentTableFeatures.length || !currentTableFIELD) return;
+
+  // Determine sort direction
+  if (currentSortColumn === column) {
+    // Toggle between asc, desc, and no sort
+    if (currentSortDirection === 'asc') {
+      currentSortDirection = 'desc';
+    } else if (currentSortDirection === 'desc') {
+      currentSortColumn = null;
+      currentSortDirection = null;
+    } else {
+      currentSortDirection = 'asc';
+    }
+  } else {
+    currentSortColumn = column;
+    currentSortDirection = 'asc';
+  }
+
+  // Update header classes
+  const headers = document.querySelectorAll('.sortable-header');
+  headers.forEach(h => {
+    h.classList.remove('sorted-asc', 'sorted-desc');
+    if (h.getAttribute('data-column') === currentSortColumn) {
+      h.classList.add(currentSortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
+
+  // Sort features
+  let sortedFeatures = [...currentTableFeatures];
+
+  if (currentSortColumn && currentSortDirection) {
+    sortedFeatures.sort((a, b) => {
+      let aVal, bVal;
+      const fieldName = currentTableFIELD[column];
+
+      if (column === 'area') {
+        aVal = fieldName ? Number(a.attributes[fieldName]) : 0;
+        bVal = fieldName ? Number(b.attributes[fieldName]) : 0;
+        aVal = isFinite(aVal) ? aVal : 0;
+        bVal = isFinite(bVal) ? bVal : 0;
+      } else if (column === 'year') {
+        aVal = fieldName ? a.attributes[fieldName] : null;
+        bVal = fieldName ? b.attributes[fieldName] : null;
+        // Handle dates
+        if (aVal instanceof Date && bVal instanceof Date) {
+          aVal = aVal.getTime();
+          bVal = bVal.getTime();
+        } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+          // Already numbers (timestamps)
+        } else {
+          aVal = aVal ? String(aVal) : '';
+          bVal = bVal ? String(bVal) : '';
+        }
+      } else {
+        aVal = fieldName ? (a.attributes[fieldName] ?? '') : '';
+        bVal = fieldName ? (b.attributes[fieldName] ?? '') : '';
+        aVal = String(aVal);
+        bVal = String(bVal);
+      }
+
+      // Compare values
+      if (aVal < bVal) return currentSortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return currentSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  // Re-render table without changing stored features
+  renderInfoTable(sortedFeatures, currentTableFIELD);
+}
+
+// Separate render function
+function renderInfoTable(features, FIELD) {
   const tbody = document.getElementById('infoTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -3481,6 +3592,31 @@ function updateInfoTable(features, FIELD) {
   });
 }
 
+// Main updateInfoTable function
+function updateInfoTable(features, FIELD) {
+  // Store features and FIELD for sorting
+  currentTableFeatures = features;
+  currentTableFIELD = FIELD;
+
+  // Reset sort state when data changes
+  currentSortColumn = null;
+  currentSortDirection = null;
+
+  // Clear sort indicators
+  const headers = document.querySelectorAll('.sortable-header');
+  headers.forEach(h => {
+    h.classList.remove('sorted-asc', 'sorted-desc');
+  });
+
+  // Initialize sorting listeners (only once)
+  if (!window.tableSortingInitialized) {
+    initializeTableSorting();
+    window.tableSortingInitialized = true;
+  }
+
+  // Render the table
+  renderInfoTable(features, FIELD);
+}
 
     function updateSummary(features, FIELD) {
       const el = document.getElementById('summaryInfo');
