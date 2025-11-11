@@ -3392,7 +3392,80 @@ async function applyFilters(opts = {}) {
   // }
 }
 
-async function initializeEventTypes() {
+// Track current view level: 'main' (10 cards), 'sub' (5 cards), or 'dynamic' (from feature layer)
+let currentEventViewLevel = 'main';
+
+// Initialize main categories (10 cards)
+async function initializeMainCategories() {
+  const container = document.getElementById('eventTypesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  currentEventViewLevel = 'main';
+
+  const mainCategories = [
+    'תשתיות והנדסה',
+    'ניהול מבקרים',
+    'מחקרים',
+    'מרעה',
+    'פיקוח',
+    'תכניות יער וממשק',
+    'אירועי פרסלציה',
+    'סקרים',
+    'טיפולים ביער',
+    'הקמת יער'
+  ];
+
+  mainCategories.forEach(categoryName => {
+    const card = document.createElement('div');
+    card.className = 'event-type-card';
+    card.innerHTML = `<div class="event-type-name">${categoryName}</div>`;
+    card.onclick = () => {
+      if (categoryName === 'אירועי פרסלציה') {
+        // Navigate to dynamic event types
+        initializeDynamicEventTypes();
+      } else {
+        // Show "in progress" message
+        alert('בתהליך פיתוח');
+      }
+    };
+    container.appendChild(card);
+  });
+}
+
+// Initialize sub categories (5 cards - shown after back button)
+async function initializeSubCategories() {
+  const container = document.getElementById('eventTypesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  currentEventViewLevel = 'sub';
+
+  const subCategories = [
+    'תכניות יער וממשק',
+    'אירועי פרסלציה',
+    'סקרים',
+    'טיפולים ביער',
+    'הקמת יער'
+  ];
+
+  subCategories.forEach(categoryName => {
+    const card = document.createElement('div');
+    card.className = 'event-type-card';
+    card.innerHTML = `<div class="event-type-name">${categoryName}</div>`;
+    card.onclick = () => {
+      if (categoryName === 'אירועי פרסלציה') {
+        // Navigate to dynamic event types
+        initializeDynamicEventTypes();
+      } else {
+        // Show "in progress" message
+        alert('בתהליך פיתוח');
+      }
+    };
+    container.appendChild(card);
+  });
+}
+
+// Initialize dynamic event types (from feature layer)
+async function initializeDynamicEventTypes() {
   if (!FIELD.type) {
     const ctr = document.getElementById('eventTypesContainer');
     if (ctr) ctr.innerHTML = '<div style="padding: 20px; color:#ccc;">אין שדה סוג אירוע</div>';
@@ -3409,6 +3482,21 @@ async function initializeEventTypes() {
   const container = document.getElementById('eventTypesContainer');
   if (!container) return;
   container.innerHTML = '';
+  currentEventViewLevel = 'dynamic';
+
+  // Add back button
+  const backButton = document.createElement('button');
+  backButton.className = 'event-type-card';
+  backButton.style.background = '#6c757d';
+  backButton.style.minWidth = '100px';
+  backButton.innerHTML = `<div class="event-type-name">← חזרה</div>`;
+  backButton.onclick = () => {
+    // Clear active event type filter when going back
+    activeEventType = null;
+    const t = document.getElementById('infoPanelTitle'); if (t) t.textContent = 'כל הפעילויות';
+    initializeSubCategories();
+  };
+  container.appendChild(backButton);
 
   const rows = (stats.features || [])
     .map(f => ({ name: String(f.attributes[FIELD.type]), value: f.attributes[FIELD.type], count: f.attributes.cnt }))
@@ -3454,7 +3542,14 @@ async function initializeEventTypes() {
   allCard.classList.add('active');
 }
 
+// Main initialization function - starts with main categories
+async function initializeEventTypes() {
+  await initializeMainCategories();
+}
+
 async function updateEventTypeCountsServer(baseWhere) {
+  // Only update counts when in dynamic view
+  if (currentEventViewLevel !== 'dynamic') return;
   if (!FIELD.type) return;
 
   let stats;
@@ -3485,12 +3580,13 @@ async function updateEventTypeCountsServer(baseWhere) {
 
   const cards = document.querySelectorAll('.event-type-card');
 
-  if (cards[0]) {
-    const allCountEl = cards[0].querySelector('.event-count');
+  // Skip the back button (first card in dynamic view)
+  if (cards[1]) {
+    const allCountEl = cards[1].querySelector('.event-count');
     if (allCountEl) allCountEl.textContent = String(total);
   }
 
-  for (let i = 1; i < cards.length; i++) {
+  for (let i = 2; i < cards.length; i++) {
     const name = cards[i].querySelector('.event-type-name')?.textContent ?? "";
     const count = counts[name] || 0;
     const el = cards[i].querySelector('.event-count');
