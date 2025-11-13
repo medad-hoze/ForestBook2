@@ -2298,21 +2298,19 @@ uniqueValueInfos: [
           const area = (a.NET_AREA ? Number(a.NET_AREA).toFixed(1)
                                    : (a.AREA ? Number(a.AREA).toFixed(1)
                                              : (a.Shape_Area ? (Number(a.Shape_Area)/1000).toFixed(1) : "-")));
-          const year = (a.year ?? a.Year ?? a.YEAR ?? "-");
           return "יער: " + (a.ForestName ?? "-")
             + "<br>גוש: " + (a.ForestGushName ?? "-")
             + "<br>חלקה: " + (a.HELKA ?? "-")
             + "<br>עומד: " + (a.STAND_NO ?? "-")
             + "<br>סוג כיסוי: " + (a.COV_TYPE_NAME ?? "-")
             + "<br>שטח: " + area + " דונם"
-            + "<br>שנה: " + year
             + "<br>אזור: " + (a.RegionName ?? a.REGION ?? "-");
         }
       }
     });
 
 
-
+    
     featureForestCurrent = new FeatureLayer({
       portalItem: { id: "ee2a901cd3d44e79bfb9bd718818f5ab" },
       layerId: 0,
@@ -2560,14 +2558,12 @@ uniqueValueInfos: [
           const area = (a.NET_AREA ? Number(a.NET_AREA).toFixed(1)
                                    : (a.AREA ? Number(a.AREA).toFixed(1)
                                              : (a.Shape_Area ? (Number(a.Shape_Area)/1000).toFixed(1) : "-")));
-          const year = (a.year ?? a.Year ?? a.YEAR ?? "-");
           return "יער: " + (a.ForestName ?? "-")
             + "<br>גוש: " + (a.ForestGushName ?? "-")
             + "<br>חלקה: " + (a.HELKA ?? "-")
             + "<br>עומד: " + (a.STAND_NO ?? "-")
             + "<br>סוג כיסוי: " + (a.COV_TYPE_NAME ?? "-")
             + "<br>שטח: " + area + " דונם"
-            + "<br>שנה: " + year
             + "<br>אזור: " + (a.RegionName ?? a.REGION ?? "-");
         }
       }
@@ -2595,10 +2591,6 @@ uniqueValueInfos: [
             photoPointsLayer.visible = e.target.checked;
         }
     });
-
-    // Add event listeners for year dropdowns to sync with time slider
-    document.getElementById('yearFrom')?.addEventListener('change', onYearSelectChange);
-    document.getElementById('yearTo')?.addEventListener('change', onYearSelectChange);
 
 // #################################################################  pics 
 
@@ -3086,9 +3078,9 @@ function resolveFieldsAfterLoad() {
 
 
 function buildForestWhere() {
-  const parts = ["UPDATE_CODE = 'D'"]; // Always filter for historical data
+  const parts = [];
   const filters = getActiveFilters();
-
+  
   // CRITICAL: Filter forest by year field
   const forestYearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
   
@@ -3127,9 +3119,9 @@ function buildForestWhere() {
   ].forEach(part => {
     if (part) parts.push(part);
   });
-
-  // Return the WHERE clause (always has at least UPDATE_CODE = 'D')
-  return parts.join(" AND ");
+  
+  // Return the WHERE clause
+  return parts.length > 0 ? parts.join(" AND ") : "1=1";
 }
 
 
@@ -3357,7 +3349,7 @@ async function applyFilters(opts = {}) {
     }
   }
 
-  const outFields = ["OBJECTID", "F_H_P", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
+  const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
     .filter(Boolean);
   const result = await featureLayer.queryFeatures({ where, returnGeometry: false, outFields });
 
@@ -4033,7 +4025,7 @@ function renderInfoTable(features, FIELD) {
     tr.onclick = () => {
       const panel = document.getElementById('infoPanel');
       if (panel) panel.style.display = 'block';
-      zoomToFeatureAndSelectHistorical(a.OBJECTID, a);
+      zoomToFeatureById(a.OBJECTID);
     };
 
     tbody.appendChild(tr);
@@ -4116,95 +4108,6 @@ function updateInfoTable(features, FIELD) {
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
     }
 
-    // Global variable to track historical layer highlights
-    let highlightHistorical = null;
-
-    async function zoomToFeatureAndSelectHistorical(objectId, attributes) {
-      try {
-        // First, zoom to and highlight the clicked feature on the events layer
-        const r = await featureLayer.queryFeatures({
-          where: `OBJECTID = ${objectId}`,
-          returnGeometry: true,
-          outFields: ["*"]
-        });
-        if (!r.features.length) return;
-        const feat = r.features[0];
-
-        // Zoom to the feature
-        await view.goTo(feat.geometry, { animate: true, zoom: 16 });
-
-        // Highlight the feature on the events layer
-        const lv = await view.whenLayerView(featureLayer);
-        if (highlightSelect) highlightSelect.remove();
-        highlightSelect = lv.highlight(feat);
-
-        // Get F_H_P and year from the feature attributes
-        const fhpValue = attributes.F_H_P;
-        const yearValue = attributes[FIELD.year];
-
-        // If F_H_P and year exist, query the historical layer for matching polygons
-        if (fhpValue != null && yearValue != null) {
-          // Build the where clause to find matching polygons in historical layer
-          const historicalYearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
-          const historicalFhpField = firstExisting(featureForest, ["F_H_P", "f_h_p"]);
-
-          if (historicalYearField && historicalFhpField) {
-            // Extract year as a number
-            const year = typeof yearValue === 'number' ? yearValue :
-                        (yearValue instanceof Date ? yearValue.getFullYear() :
-                        new Date(yearValue).getFullYear());
-
-            // Build conditions using the formatSqlFilter helper
-            const fhpCondition = formatSqlFilter(featureForest, historicalFhpField, fhpValue);
-            const yearCondition = formatSqlFilter(featureForest, historicalYearField, year);
-
-            if (!fhpCondition || !yearCondition) {
-              console.warn('Could not build valid SQL conditions for F_H_P or year');
-              return;
-            }
-
-            const whereClause = `${fhpCondition} AND ${yearCondition}`;
-
-            console.log('Querying historical layer with:', whereClause);
-
-            // Query the historical layer
-            const historicalResults = await featureForest.queryFeatures({
-              where: whereClause,
-              returnGeometry: true,
-              outFields: ["*"]
-            });
-
-            // Highlight the matching polygons on the historical layer
-            if (historicalResults.features.length > 0) {
-              const historicalLv = await view.whenLayerView(featureForest);
-              if (highlightHistorical) highlightHistorical.remove();
-              highlightHistorical = historicalLv.highlight(historicalResults.features);
-
-              console.log(`Found and highlighted ${historicalResults.features.length} polygon(s) on historical layer`);
-
-              // Make sure the historical layer is visible
-              if (!featureForest.visible) {
-                featureForest.visible = true;
-                const toggle = document.getElementById('forestLayerToggle');
-                if (toggle) toggle.checked = true;
-              }
-            } else {
-              console.log('No matching polygons found on historical layer');
-              // Remove any existing historical highlights
-              if (highlightHistorical) {
-                highlightHistorical.remove();
-                highlightHistorical = null;
-              }
-            }
-          } else {
-            console.warn('Could not find F_H_P or year field on historical layer');
-          }
-        }
-      } catch (e) {
-        console.warn("zoomToFeatureAndSelectHistorical failed", e);
-      }
-    }
-
     let searchWidget; 
 
     ['DistrictName','region','forest','gush','parcel','stand'].forEach(id => {
@@ -4249,6 +4152,4 @@ function updateInfoTable(features, FIELD) {
 
   });
 </script>
-
-
 
