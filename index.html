@@ -2298,19 +2298,21 @@ uniqueValueInfos: [
           const area = (a.NET_AREA ? Number(a.NET_AREA).toFixed(1)
                                    : (a.AREA ? Number(a.AREA).toFixed(1)
                                              : (a.Shape_Area ? (Number(a.Shape_Area)/1000).toFixed(1) : "-")));
+          const year = (a.year ?? a.Year ?? a.YEAR ?? "-");
           return "יער: " + (a.ForestName ?? "-")
             + "<br>גוש: " + (a.ForestGushName ?? "-")
             + "<br>חלקה: " + (a.HELKA ?? "-")
             + "<br>עומד: " + (a.STAND_NO ?? "-")
             + "<br>סוג כיסוי: " + (a.COV_TYPE_NAME ?? "-")
             + "<br>שטח: " + area + " דונם"
+            + "<br>שנה: " + year
             + "<br>אזור: " + (a.RegionName ?? a.REGION ?? "-");
         }
       }
     });
 
 
-    
+
     featureForestCurrent = new FeatureLayer({
       portalItem: { id: "ee2a901cd3d44e79bfb9bd718818f5ab" },
       layerId: 0,
@@ -2558,12 +2560,14 @@ uniqueValueInfos: [
           const area = (a.NET_AREA ? Number(a.NET_AREA).toFixed(1)
                                    : (a.AREA ? Number(a.AREA).toFixed(1)
                                              : (a.Shape_Area ? (Number(a.Shape_Area)/1000).toFixed(1) : "-")));
+          const year = (a.year ?? a.Year ?? a.YEAR ?? "-");
           return "יער: " + (a.ForestName ?? "-")
             + "<br>גוש: " + (a.ForestGushName ?? "-")
             + "<br>חלקה: " + (a.HELKA ?? "-")
             + "<br>עומד: " + (a.STAND_NO ?? "-")
             + "<br>סוג כיסוי: " + (a.COV_TYPE_NAME ?? "-")
             + "<br>שטח: " + area + " דונם"
+            + "<br>שנה: " + year
             + "<br>אזור: " + (a.RegionName ?? a.REGION ?? "-");
         }
       }
@@ -2591,6 +2595,10 @@ uniqueValueInfos: [
             photoPointsLayer.visible = e.target.checked;
         }
     });
+
+    // Add event listeners for year dropdowns to sync with time slider
+    document.getElementById('yearFrom')?.addEventListener('change', onYearSelectChange);
+    document.getElementById('yearTo')?.addEventListener('change', onYearSelectChange);
 
 // #################################################################  pics 
 
