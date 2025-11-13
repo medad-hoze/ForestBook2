@@ -3067,6 +3067,7 @@ function resolveFieldsAfterLoad() {
     gush:   firstExisting(featureLayer, ["ForestGushName","GUSH"]),
     parcel: firstExisting(featureLayer, ["HELKA","Parcel"]),
     stand:  firstExisting(featureLayer, ["STAND_NO","StandNo"]),
+    fhp:    firstExisting(featureLayer, ["F_H_P","FHP","fhp"]),
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
     year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
     type:   eventTypeField,
@@ -3349,7 +3350,7 @@ async function applyFilters(opts = {}) {
     }
   }
 
-  const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
+  const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.fhp, FIELD.area, FIELD.year, FIELD.type]
     .filter(Boolean);
   const result = await featureLayer.queryFeatures({ where, returnGeometry: false, outFields });
 
@@ -3987,6 +3988,8 @@ function renderInfoTable(features, FIELD) {
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  const formatDisplayValue = (value) => (value == null || value === '' ? '-' : value);
+
   if (!features.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">אין נתונים להצגה</td></tr>';
     updateSummary([], FIELD);
@@ -3999,10 +4002,16 @@ function renderInfoTable(features, FIELD) {
     tr.className = 'clickable-row';
     tr.setAttribute('data-oid', a.OBJECTID);
 
-    const stand  = FIELD.stand  ? (a[FIELD.stand]  ?? '-') : '-';
-    const parcel = FIELD.parcel ? (a[FIELD.parcel] ?? '-') : '-';
-    const gush   = FIELD.gush   ? (a[FIELD.gush]   ?? '-') : '-';
-    const forest = FIELD.forest ? (a[FIELD.forest] ?? '-') : '-';
+    const standRaw  = FIELD.stand  ? a[FIELD.stand]  : null;
+    const parcelRaw = FIELD.parcel ? a[FIELD.parcel] : null;
+    const gushRaw   = FIELD.gush   ? a[FIELD.gush]   : null;
+    const forestRaw = FIELD.forest ? a[FIELD.forest] : null;
+    const fhpRaw    = FIELD.fhp    ? a[FIELD.fhp]    : null;
+
+    const stand  = formatDisplayValue(standRaw);
+    const parcel = formatDisplayValue(parcelRaw);
+    const gush   = formatDisplayValue(gushRaw);
+    const forest = formatDisplayValue(forestRaw);
     let area = '-';
     if (FIELD.area) {
       const v = Number(a[FIELD.area]);
@@ -4043,7 +4052,14 @@ function renderInfoTable(features, FIELD) {
       }
 
       // Select polygon on historical forest layer using year and identifying fields
-      selectForestPolygonByYearAndFields(yearNum, forest, gush, parcel, stand);
+      selectForestPolygonByYearAndFields({
+        year: yearNum,
+        fhp: fhpRaw,
+        forest: forestRaw,
+        gush: gushRaw,
+        parcel: parcelRaw,
+        stand: standRaw
+      });
     };
 
     tbody.appendChild(tr);
@@ -4126,7 +4142,7 @@ function updateInfoTable(features, FIELD) {
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
     }
 
-    async function selectForestPolygonByYearAndFields(year, forest, gush, parcel, stand) {
+    async function selectForestPolygonByYearAndFields({ year, fhp, forest, gush, parcel, stand } = {}) {
       try {
         // Ensure the historical forest layer is visible
         if (!featureForest.visible) {
@@ -4135,24 +4151,20 @@ function updateInfoTable(features, FIELD) {
           if (toggle) toggle.checked = true;
         }
 
-        // Build the where clause to match the polygon
-        const whereParts = [];
-
-        // Add year filter
         const forestYearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
-        if (forestYearField && year) {
-          whereParts.push(`${forestYearField} = ${year}`);
+        const forestFhpField = firstExisting(featureForest, ["F_H_P", "FHP", "fhp"]);
+
+        const baseClauses = [];
+        if (forestYearField && year != null && year !== '' && !Number.isNaN(Number(year))) {
+          const numericYear = Number(year);
+          baseClauses.push(`${forestYearField} = ${Math.round(numericYear)}`);
         }
 
-        // Try to match using F_H_P field first
-        const fhpField = firstExisting(featureForest, ["F_H_P", "FHP"]);
+        const fhpClause = (forestFhpField && fhp != null && fhp !== '' && fhp !== '-')
+          ? formatSqlFilter(featureForest, forestFhpField, fhp)
+          : null;
 
-        if (fhpField) {
-          // If F_H_P field exists, try to get it from the source feature
-          // For now, we'll use individual field matching
-        }
-
-        // Match using individual fields
+        const attributeClauses = [];
         const forestFields = {
           forest: firstExisting(featureForest, ["ForestName", "FOREST"]),
           gush: firstExisting(featureForest, ["ForestGushName", "GUSH"]),
@@ -4160,43 +4172,56 @@ function updateInfoTable(features, FIELD) {
           stand: firstExisting(featureForest, ["STAND_NO", "StandNo"])
         };
 
-        if (forestFields.forest && forest && forest !== '-') {
-          whereParts.push(`${forestFields.forest} = '${forest.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.gush && gush && gush !== '-') {
-          whereParts.push(`${forestFields.gush} = '${gush.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.parcel && parcel && parcel !== '-') {
-          whereParts.push(`${forestFields.parcel} = '${parcel.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.stand && stand && stand !== '-') {
-          whereParts.push(`${forestFields.stand} = '${stand.replace(/'/g, "''")}'`);
+        const maybeAddClause = (fieldName, value) => {
+          if (!fieldName || value == null || value === '' || value === '-') return;
+          const clause = formatSqlFilter(featureForest, fieldName, value);
+          if (clause) attributeClauses.push(clause);
+        };
+
+        maybeAddClause(forestFields.forest, forest);
+        maybeAddClause(forestFields.gush, gush);
+        maybeAddClause(forestFields.parcel, parcel);
+        maybeAddClause(forestFields.stand, stand);
+
+        const queryVariants = [];
+        const buildClauses = (...parts) => parts.filter(Boolean).flat();
+
+        // Prioritize using both year and F_H_P with fallbacks to other identifiers
+        queryVariants.push(buildClauses(baseClauses, fhpClause ? [fhpClause] : null, attributeClauses));
+        queryVariants.push(buildClauses(baseClauses, fhpClause ? [fhpClause] : null));
+        queryVariants.push(buildClauses(baseClauses, attributeClauses));
+        queryVariants.push(buildClauses(attributeClauses));
+        queryVariants.push(buildClauses(baseClauses));
+
+        const attempted = new Set();
+        let matchedFeature = null;
+
+        for (const clauses of queryVariants) {
+          if (!clauses || !clauses.length) continue;
+          const where = clauses.join(' AND ');
+          if (attempted.has(where)) continue;
+          attempted.add(where);
+          console.log("Querying forest layer with:", where);
+
+          const result = await featureForest.queryFeatures({
+            where,
+            returnGeometry: true,
+            outFields: ["*"]
+          });
+
+          if (result.features.length) {
+            matchedFeature = result.features[0];
+            break;
+          }
         }
 
-        if (whereParts.length === 0) {
-          console.warn("No valid criteria to query forest polygon");
-          return;
-        }
-
-        const where = whereParts.join(' AND ');
-        console.log("Querying forest layer with:", where);
-
-        // Query the forest layer - it will automatically respect the layer's definitionExpression
-        // which includes the filters and time slider
-        const result = await featureForest.queryFeatures({
-          where: where,
-          returnGeometry: true,
-          outFields: ["*"]
-        });
-
-        if (!result.features.length) {
+        if (!matchedFeature) {
           console.warn("No matching polygon found in historical forest layer");
           console.warn("This could be because the polygon is filtered out by current filters or time slider");
           return;
         }
 
-        // If multiple features found, take the first one
-        const feature = result.features[0];
+        const feature = matchedFeature;
 
         // Zoom to the feature
         await view.goTo(feature.geometry, { animate: true, zoom: 16 });
