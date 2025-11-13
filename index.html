@@ -3070,6 +3070,7 @@ function resolveFieldsAfterLoad() {
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
     year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
     type:   eventTypeField,
+    fhp:    firstExisting(featureLayer, ["F_H_P","FHP"]),
     // חשוב! וודא ששדה year בשכבת היער מזוהה נכון
     forestYear: firstExisting(featureForest, ["year","Year","YEAR"])
   };
@@ -4042,8 +4043,11 @@ function renderInfoTable(features, FIELD) {
         }
       }
 
-      // Select polygon on historical forest layer using year and identifying fields
-      selectForestPolygonByYearAndFields(yearNum, forest, gush, parcel, stand);
+      // Get F_H_P value from the row data
+      const fhpValue = FIELD.fhp ? a[FIELD.fhp] : null;
+
+      // Select polygon on historical forest layer using year and F_H_P
+      selectForestPolygonByYearAndFHP(yearNum, fhpValue);
     };
 
     tbody.appendChild(tr);
@@ -4126,7 +4130,7 @@ function updateInfoTable(features, FIELD) {
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
     }
 
-    async function selectForestPolygonByYearAndFields(year, forest, gush, parcel, stand) {
+    async function selectForestPolygonByYearAndFHP(year, fhpValue) {
       try {
         // Ensure the historical forest layer is visible
         if (!featureForest.visible) {
@@ -4135,7 +4139,7 @@ function updateInfoTable(features, FIELD) {
           if (toggle) toggle.checked = true;
         }
 
-        // Build the where clause to match the polygon
+        // Build the where clause to match the polygon using F_H_P and year
         const whereParts = [];
 
         // Add year filter
@@ -4144,37 +4148,14 @@ function updateInfoTable(features, FIELD) {
           whereParts.push(`${forestYearField} = ${year}`);
         }
 
-        // Try to match using F_H_P field first
+        // Add F_H_P filter
         const fhpField = firstExisting(featureForest, ["F_H_P", "FHP"]);
-
-        if (fhpField) {
-          // If F_H_P field exists, try to get it from the source feature
-          // For now, we'll use individual field matching
-        }
-
-        // Match using individual fields
-        const forestFields = {
-          forest: firstExisting(featureForest, ["ForestName", "FOREST"]),
-          gush: firstExisting(featureForest, ["ForestGushName", "GUSH"]),
-          parcel: firstExisting(featureForest, ["HELKA", "Parcel"]),
-          stand: firstExisting(featureForest, ["STAND_NO", "StandNo"])
-        };
-
-        if (forestFields.forest && forest && forest !== '-') {
-          whereParts.push(`${forestFields.forest} = '${forest.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.gush && gush && gush !== '-') {
-          whereParts.push(`${forestFields.gush} = '${gush.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.parcel && parcel && parcel !== '-') {
-          whereParts.push(`${forestFields.parcel} = '${parcel.replace(/'/g, "''")}'`);
-        }
-        if (forestFields.stand && stand && stand !== '-') {
-          whereParts.push(`${forestFields.stand} = '${stand.replace(/'/g, "''")}'`);
+        if (fhpField && fhpValue != null) {
+          whereParts.push(`${fhpField} = ${fhpValue}`);
         }
 
         if (whereParts.length === 0) {
-          console.warn("No valid criteria to query forest polygon");
+          console.warn("No valid criteria to query forest polygon (need year and F_H_P)");
           return;
         }
 
@@ -4206,10 +4187,10 @@ function updateInfoTable(features, FIELD) {
         if (highlightSelect) highlightSelect.remove();
         highlightSelect = forestLayerView.highlight(feature);
 
-        console.log(`Selected forest polygon:`, feature.attributes);
+        console.log(`Selected forest polygon with F_H_P=${fhpValue}, year=${year}:`, feature.attributes);
 
       } catch (e) {
-        console.warn("selectForestPolygonByYearAndFields failed", e);
+        console.warn("selectForestPolygonByYearAndFHP failed", e);
       }
     }
 
