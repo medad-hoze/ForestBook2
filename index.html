@@ -4005,7 +4005,7 @@ function renderInfoTable(features, FIELD) {
     const forest = FIELD.forest ? (a[FIELD.forest] ?? '-') : '-';
     let area = '-';
     if (FIELD.area) {
-      const v = Number(a[FIELD.area]); 
+      const v = Number(a[FIELD.area]);
       area = isFinite(v) ? v.toFixed(1) : '-';
     }
 
@@ -4025,7 +4025,25 @@ function renderInfoTable(features, FIELD) {
     tr.onclick = () => {
       const panel = document.getElementById('infoPanel');
       if (panel) panel.style.display = 'block';
-      zoomToFeatureById(a.OBJECTID);
+
+      // Get the year as a number from the date
+      let yearNum = null;
+      if (FIELD.year && a[FIELD.year]) {
+        const dateVal = a[FIELD.year];
+        if (dateVal instanceof Date) {
+          yearNum = dateVal.getFullYear();
+        } else if (typeof dateVal === 'number') {
+          yearNum = dateVal;
+        } else if (typeof dateVal === 'string') {
+          const parsed = new Date(dateVal);
+          if (!isNaN(parsed)) {
+            yearNum = parsed.getFullYear();
+          }
+        }
+      }
+
+      // Select polygon on historical forest layer using year and identifying fields
+      selectForestPolygonByYearAndFields(yearNum, forest, gush, parcel, stand);
     };
 
     tbody.appendChild(tr);
@@ -4106,6 +4124,93 @@ function updateInfoTable(features, FIELD) {
         if (highlightSelect) highlightSelect.remove();
         highlightSelect = lv.highlight(feat);
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
+    }
+
+    async function selectForestPolygonByYearAndFields(year, forest, gush, parcel, stand) {
+      try {
+        // Ensure the historical forest layer is visible
+        if (!featureForest.visible) {
+          featureForest.visible = true;
+          const toggle = document.getElementById('forestLayerToggle');
+          if (toggle) toggle.checked = true;
+        }
+
+        // Build the where clause to match the polygon
+        const whereParts = [];
+
+        // Add year filter
+        const forestYearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
+        if (forestYearField && year) {
+          whereParts.push(`${forestYearField} = ${year}`);
+        }
+
+        // Try to match using F_H_P field first
+        const fhpField = firstExisting(featureForest, ["F_H_P", "FHP"]);
+
+        if (fhpField) {
+          // If F_H_P field exists, try to get it from the source feature
+          // For now, we'll use individual field matching
+        }
+
+        // Match using individual fields
+        const forestFields = {
+          forest: firstExisting(featureForest, ["ForestName", "FOREST"]),
+          gush: firstExisting(featureForest, ["ForestGushName", "GUSH"]),
+          parcel: firstExisting(featureForest, ["HELKA", "Parcel"]),
+          stand: firstExisting(featureForest, ["STAND_NO", "StandNo"])
+        };
+
+        if (forestFields.forest && forest && forest !== '-') {
+          whereParts.push(`${forestFields.forest} = '${forest.replace(/'/g, "''")}'`);
+        }
+        if (forestFields.gush && gush && gush !== '-') {
+          whereParts.push(`${forestFields.gush} = '${gush.replace(/'/g, "''")}'`);
+        }
+        if (forestFields.parcel && parcel && parcel !== '-') {
+          whereParts.push(`${forestFields.parcel} = '${parcel.replace(/'/g, "''")}'`);
+        }
+        if (forestFields.stand && stand && stand !== '-') {
+          whereParts.push(`${forestFields.stand} = '${stand.replace(/'/g, "''")}'`);
+        }
+
+        if (whereParts.length === 0) {
+          console.warn("No valid criteria to query forest polygon");
+          return;
+        }
+
+        const where = whereParts.join(' AND ');
+        console.log("Querying forest layer with:", where);
+
+        // Query the forest layer - it will automatically respect the layer's definitionExpression
+        // which includes the filters and time slider
+        const result = await featureForest.queryFeatures({
+          where: where,
+          returnGeometry: true,
+          outFields: ["*"]
+        });
+
+        if (!result.features.length) {
+          console.warn("No matching polygon found in historical forest layer");
+          console.warn("This could be because the polygon is filtered out by current filters or time slider");
+          return;
+        }
+
+        // If multiple features found, take the first one
+        const feature = result.features[0];
+
+        // Zoom to the feature
+        await view.goTo(feature.geometry, { animate: true, zoom: 16 });
+
+        // Highlight the feature on the forest layer
+        const forestLayerView = await view.whenLayerView(featureForest);
+        if (highlightSelect) highlightSelect.remove();
+        highlightSelect = forestLayerView.highlight(feature);
+
+        console.log(`Selected forest polygon:`, feature.attributes);
+
+      } catch (e) {
+        console.warn("selectForestPolygonByYearAndFields failed", e);
+      }
     }
 
     let searchWidget; 
