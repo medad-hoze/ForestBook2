@@ -3070,10 +3070,8 @@ function resolveFieldsAfterLoad() {
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
     year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
     type:   eventTypeField,
-    fhp:    firstExisting(featureLayer, ["F_H_P","FHP","f_h_p"]),
     // חשוב! וודא ששדה year בשכבת היער מזוהה נכון
-    forestYear: firstExisting(featureForest, ["year","Year","YEAR"]),
-    forestFHP: firstExisting(featureForest, ["F_H_P","FHP","f_h_p"])
+    forestYear: firstExisting(featureForest, ["year","Year","YEAR"])
   };
 }
 
@@ -4027,22 +4025,7 @@ function renderInfoTable(features, FIELD) {
     tr.onclick = () => {
       const panel = document.getElementById('infoPanel');
       if (panel) panel.style.display = 'block';
-
-      // Extract year and F_H_P from the row
-      const rowYear = FIELD.year ? a[FIELD.year] : null;
-      const rowFHP = FIELD.fhp ? a[FIELD.fhp] : null;
-
-      // If we have both year and F_H_P, select the polygon on the historical layer
-      if (rowYear && rowFHP) {
-        // Convert year to simple format if it's a date
-        const yearValue = rowYear instanceof Date ? rowYear.getFullYear() :
-                         (typeof rowYear === 'number' ? rowYear : parseInt(rowYear));
-        selectForestPolygonByYearAndFHP(yearValue, rowFHP);
-      } else {
-        // Fallback to zooming to the event feature
-        console.log("Missing year or F_H_P, falling back to zoom to event");
-        zoomToFeatureById(a.OBJECTID);
-      }
+      zoomToFeatureById(a.OBJECTID);
     };
 
     tbody.appendChild(tr);
@@ -4123,70 +4106,6 @@ function updateInfoTable(features, FIELD) {
         if (highlightSelect) highlightSelect.remove();
         highlightSelect = lv.highlight(feat);
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
-    }
-
-    async function selectForestPolygonByYearAndFHP(year, fhpValue) {
-      try {
-        // Ensure the historical forest layer is visible
-        if (!featureForest.visible) {
-          featureForest.visible = true;
-          const toggle = document.getElementById('forestLayerToggle');
-          if (toggle) toggle.checked = true;
-        }
-
-        // Build query based on available fields
-        if (!FIELD.forestYear || !FIELD.forestFHP) {
-          console.warn("Cannot select polygon: missing year or F_H_P field in historical layer");
-          return;
-        }
-
-        // Query the historical forest layer
-        const whereParts = [];
-        if (year && year !== '-') {
-          // Handle year - it might be a date or number
-          const yearNum = parseInt(year);
-          if (!isNaN(yearNum)) {
-            whereParts.push(`${FIELD.forestYear} = ${yearNum}`);
-          }
-        }
-        if (fhpValue != null && fhpValue !== '-') {
-          whereParts.push(`${FIELD.forestFHP} = ${fhpValue}`);
-        }
-
-        if (whereParts.length === 0) {
-          console.warn("Cannot select polygon: no valid year or F_H_P values");
-          return;
-        }
-
-        const whereClause = whereParts.join(' AND ');
-        console.log("Querying historical layer with:", whereClause);
-
-        const result = await featureForest.queryFeatures({
-          where: whereClause,
-          returnGeometry: true,
-          outFields: ["*"]
-        });
-
-        if (!result.features.length) {
-          console.warn("No polygon found in historical layer with year:", year, "and F_H_P:", fhpValue);
-          return;
-        }
-
-        // Select the first matching polygon
-        const feature = result.features[0];
-        console.log("Found polygon in historical layer:", feature.attributes);
-
-        // Zoom to the polygon
-        await view.goTo(feature.geometry, { animate: true, zoom: 16 });
-
-        // Highlight the polygon
-        const forestLV = await view.whenLayerView(featureForest);
-        if (highlightSelect) highlightSelect.remove();
-        highlightSelect = forestLV.highlight(feature);
-
-      } catch (e) {
-        console.error("selectForestPolygonByYearAndFHP failed:", e);
-      }
     }
 
     let searchWidget; 
