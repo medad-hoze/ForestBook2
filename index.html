@@ -1911,6 +1911,8 @@ document.addEventListener('keydown', function(e) {
     let timeSlider = null;
     let currentTimeExtent = null;
     let highlightSelect = null;
+    let forestHighlight = null; // Add this line
+
     let forestLayerManuallyToggled = false;
     let lastExtentJSON = null;
     let photoPointsLayer = null;
@@ -3053,7 +3055,7 @@ onYearSelectChange = function() {
 
 
 
-function resolveFieldsAfterLoad() {
+async function resolveFieldsAfterLoad() {
   eventTypeField = (function pickEventTypeField(layer) {
     const candidates = ["EventType","EVENTTYPE","EVENT_TYPE","ActivityType","WorkType","TYPE"];
     for (const c of candidates) if (hasField(layer, c)) return c;
@@ -3070,11 +3072,23 @@ function resolveFieldsAfterLoad() {
     area:   firstExisting(featureLayer, ["NET_AREA","AREA","Shape_Area"]),
     year:   firstExisting(featureLayer, ["year","Year","YEAR"]),
     type:   eventTypeField,
-    // חשוב! וודא ששדה year בשכבת היער מזוהה נכון
-    forestYear: firstExisting(featureForest, ["year","Year","YEAR"])
+    fhp:    firstExisting(featureLayer, ["F_H_P", "FHP", "f_h_p", "fhp"])
   };
+  
+  // Load forest layer and get its fields
+  await featureForest.load();
+  
+  // Now add forest layer fields after it's loaded
+  FIELD.forestYear = firstExisting(featureForest, ["year","Year","YEAR"]);
+  FIELD.forestFHP = firstExisting(featureForest, ["F_H_P", "FHP", "f_h_p", "fhp"]);
+  
+  // Debug: Log the detected fields
+  console.log("Detected F_H_P fields:", {
+    events: FIELD.fhp,
+    forest: FIELD.forestFHP
+  });
+  console.log("Forest layer fields:", featureForest.fields.map(f => f.name));
 }
-
 
 
 function buildForestWhere() {
@@ -3349,7 +3363,7 @@ async function applyFilters(opts = {}) {
     }
   }
 
-  const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type]
+const outFields = ["OBJECTID", FIELD.DistrictName, FIELD.region, FIELD.forest, FIELD.gush, FIELD.parcel, FIELD.stand, FIELD.area, FIELD.year, FIELD.type, FIELD.fhp]
     .filter(Boolean);
   const result = await featureLayer.queryFeatures({ where, returnGeometry: false, outFields });
 
@@ -4022,11 +4036,81 @@ function renderInfoTable(features, FIELD) {
       <td>${et}</td>
     `;
 
-    tr.onclick = () => {
-      const panel = document.getElementById('infoPanel');
-      if (panel) panel.style.display = 'block';
-      zoomToFeatureById(a.OBJECTID);
-    };
+tr.onclick = async () => {
+  const panel = document.getElementById('infoPanel');
+  if (panel) panel.style.display = 'block';
+  
+  // Zoom to the feature
+  zoomToFeatureById(a.OBJECTID);
+  
+  // Debug: Log the field names and values
+  console.log("FIELD.fhp:", FIELD.fhp, "Value:", a[FIELD.fhp]);
+  console.log("FIELD.year:", FIELD.year, "Value:", a[FIELD.year]);
+  console.log("FIELD.forestFHP:", FIELD.forestFHP);
+  console.log("FIELD.forestYear:", FIELD.forestYear);
+  
+  // Check if we have F_H_P and year values
+  if (FIELD.fhp && FIELD.year && FIELD.forestFHP && FIELD.forestYear) {
+    const fhpValue = a[FIELD.fhp];
+    const yearValue = a[FIELD.year];
+    
+    console.log("FHP Value:", fhpValue, "Year Value:", yearValue);
+    
+    if (fhpValue && yearValue) {
+      // Extract year if it's a date
+      let year = yearValue;
+      if (yearValue instanceof Date) {
+        year = yearValue.getFullYear();
+      } else if (typeof yearValue === 'number' && yearValue > 10000) {
+        // Likely a timestamp
+        year = new Date(yearValue).getFullYear();
+      }
+      
+      // Build WHERE clause - handle both string and numeric F_H_P
+      let whereClause;
+      const forestFHPField = featureForest.fields?.find(f => f.name === FIELD.forestFHP);
+      
+      if (forestFHPField && ['integer', 'double', 'small-integer', 'big-integer', 'single', 'long', 'number', 'oid'].includes(forestFHPField.type)) {
+        // Numeric field
+        whereClause = `${FIELD.forestFHP} = ${fhpValue} AND ${FIELD.forestYear} = ${year}`;
+      } else {
+        // String field
+        whereClause = `${FIELD.forestFHP} = '${String(fhpValue).replace(/'/g, "''")}' AND ${FIELD.forestYear} = ${year}`;
+      }
+      
+      console.log("Forest query WHERE clause:", whereClause);
+      
+      // Query featureForest for matching F_H_P and year
+      try {
+        const forestQuery = await featureForest.queryFeatures({
+          where: whereClause,
+          returnGeometry: true,
+          outFields: ["OBJECTID", FIELD.forestFHP, FIELD.forestYear]
+        });
+        
+        console.log("Forest query results:", forestQuery.features.length, "features found");
+        
+        if (forestQuery.features.length > 0) {
+          // Highlight matching forest polygons
+          const forestLayerView = await view.whenLayerView(featureForest);
+          
+          // Remove previous highlight if exists
+          if (window.forestHighlight) {
+            window.forestHighlight.remove();
+          }
+          
+          // Highlight all matching forest features
+          window.forestHighlight = forestLayerView.highlight(forestQuery.features);
+          console.log("Forest polygons highlighted");
+        }
+      } catch (e) {
+        console.error("Failed to highlight forest polygons:", e);
+      }
+    }
+  } else {
+    console.log("Missing required fields for forest highlighting");
+  }
+};
 
     tbody.appendChild(tr);
   });
@@ -4092,21 +4176,22 @@ function updateInfoTable(features, FIELD) {
       `;
     }
 
-    async function zoomToFeatureById(objectId) {
-      try {
-        const r = await featureLayer.queryFeatures({
-          where: `OBJECTID = ${objectId}`,
-          returnGeometry: true,
-          outFields: ["OBJECTID"]
-        });
-        if (!r.features.length) return;
-        const feat = r.features[0];
-        await view.goTo(feat.geometry, { animate: true, zoom: 16 });
-        const lv = await view.whenLayerView(featureLayer);
-        if (highlightSelect) highlightSelect.remove();
-        highlightSelect = lv.highlight(feat);
-      } catch (e) { console.warn("zoomToFeatureById failed", e); }
-    }
+async function zoomToFeatureById(objectId) {
+  try {
+    const r = await featureLayer.queryFeatures({
+      where: `OBJECTID = ${objectId}`,
+      returnGeometry: true,
+      outFields: ["OBJECTID"]
+    });
+    if (!r.features.length) return;
+    const feat = r.features[0];
+    await view.goTo(feat.geometry, { animate: true, zoom: 16 });
+    const lv = await view.whenLayerView(featureLayer);
+    if (highlightSelect) highlightSelect.remove();
+    if (window.forestHighlight) window.forestHighlight.remove(); // Add this line
+    highlightSelect = lv.highlight(feat);
+  } catch (e) { console.warn("zoomToFeatureById failed", e); }
+}
 
     let searchWidget; 
 
@@ -4168,4 +4253,5 @@ function updateInfoTable(features, FIELD) {
 
   });
 </script>
+
 
