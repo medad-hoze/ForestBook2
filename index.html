@@ -4115,6 +4115,22 @@ function updateInfoTable(features, FIELD) {
       if (el) el.addEventListener('change', () => { forestLayerManuallyToggled = false; debouncedApply(); });
     });
 
+    // Add event listeners for year selects to update time slider
+    const yearFromEl = document.getElementById('yearFrom');
+    const yearToEl = document.getElementById('yearTo');
+
+    if (yearFromEl) {
+      yearFromEl.addEventListener('change', () => {
+        onYearSelectChange();
+      });
+    }
+
+    if (yearToEl) {
+      yearToEl.addEventListener('change', () => {
+        onYearSelectChange();
+      });
+    }
+
     (async function boot() {
       try {
         await featureLayer.load();
