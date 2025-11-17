@@ -1905,12 +1905,13 @@ document.addEventListener('keydown', function(e) {
   ], function (Map, MapView, FeatureLayer, Search, TimeSlider) {
 
     let featureLayer, featureForest;
-    let activeEventType = null;   
+    let activeEventType = null;
     let eventTypeField = null;
-    let FIELD = {};              
+    let FIELD = {};
     let timeSlider = null;
     let currentTimeExtent = null;
     let highlightSelect = null;
+    let highlightForestSelect = null;
     let forestLayerManuallyToggled = false;
     let lastExtentJSON = null;
     let photoPointsLayer = null;
@@ -4026,6 +4027,27 @@ function renderInfoTable(features, FIELD) {
       const panel = document.getElementById('infoPanel');
       if (panel) panel.style.display = 'block';
       zoomToFeatureById(a.OBJECTID);
+
+      // Highlight matching polygon in historical layer using F_H_P-year key
+      const fhpValue = a.F_H_P || a.FHP || (FIELD.stand ? a[FIELD.stand] : null);
+      let yearValue = null;
+      if (FIELD.year && a[FIELD.year]) {
+        const rawYear = a[FIELD.year];
+        if (typeof rawYear === 'number') {
+          yearValue = rawYear;
+        } else if (!isNaN(rawYear)) {
+          yearValue = Number(rawYear);
+        } else {
+          const d = new Date(rawYear);
+          if (!isNaN(d)) {
+            yearValue = d.getFullYear();
+          }
+        }
+      }
+
+      if (fhpValue && yearValue) {
+        highlightHistoricalPolygon(fhpValue, yearValue);
+      }
     };
 
     tbody.appendChild(tr);
@@ -4106,6 +4128,43 @@ function updateInfoTable(features, FIELD) {
         if (highlightSelect) highlightSelect.remove();
         highlightSelect = lv.highlight(feat);
       } catch (e) { console.warn("zoomToFeatureById failed", e); }
+    }
+
+    async function highlightHistoricalPolygon(fhpValue, yearValue) {
+      try {
+        // Remove existing highlight
+        if (highlightForestSelect) highlightForestSelect.remove();
+
+        // Get the field names for F_H_P and year in the historical layer
+        const fhpField = firstExisting(featureForest, ["F_H_P", "FHP", "STAND_NO"]);
+        const yearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
+
+        if (!fhpField || !yearField || !fhpValue || !yearValue) {
+          console.warn("Cannot highlight: missing field or value", { fhpField, yearField, fhpValue, yearValue });
+          return;
+        }
+
+        // Build where clause using F_H_P-year key match
+        const whereClause = `${fhpField} = '${fhpValue}' AND ${yearField} = ${yearValue}`;
+
+        const r = await featureForest.queryFeatures({
+          where: whereClause,
+          returnGeometry: true,
+          outFields: ["*"]
+        });
+
+        if (!r.features.length) {
+          console.warn("No matching polygon found in historical layer", whereClause);
+          return;
+        }
+
+        // Highlight the matching polygon(s)
+        const lv = await view.whenLayerView(featureForest);
+        highlightForestSelect = lv.highlight(r.features);
+
+      } catch (e) {
+        console.warn("highlightHistoricalPolygon failed", e);
+      }
     }
 
     let searchWidget; 
