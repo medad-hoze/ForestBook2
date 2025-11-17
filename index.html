@@ -4135,6 +4135,11 @@ function updateInfoTable(features, FIELD) {
         // Remove existing highlight
         if (highlightForestSelect) highlightForestSelect.remove();
 
+        // Ensure featureForest is loaded
+        if (!featureForest.loaded) {
+          await featureForest.load();
+        }
+
         // Get the year field name for the historical layer
         const yearField = firstExisting(featureForest, ["year", "Year", "YEAR"]);
         const fhpField = firstExisting(featureForest, ["F_H_P", "FHP"]);
@@ -4144,14 +4149,25 @@ function updateInfoTable(features, FIELD) {
           return;
         }
 
-        // Build where clause to find matching polygon
-        const whereClause = `${fhpField} = '${fhpValue}' AND ${yearField} = ${yearValue}`;
+        // Build where clause using formatSqlFilter to handle field types correctly
+        const fhpFilter = formatSqlFilter(featureForest, fhpField, fhpValue);
+        const yearFilter = formatSqlFilter(featureForest, yearField, yearValue);
+
+        if (!fhpFilter || !yearFilter) {
+          console.warn("Could not build valid SQL filter", { fhpFilter, yearFilter });
+          return;
+        }
+
+        const whereClause = `${fhpFilter} AND ${yearFilter}`;
+        console.log("Querying historical layer with:", whereClause);
 
         const r = await featureForest.queryFeatures({
           where: whereClause,
           returnGeometry: true,
           outFields: ["*"]
         });
+
+        console.log(`Found ${r.features.length} matching polygons`);
 
         if (!r.features.length) {
           console.warn("No matching polygon found in historical layer", whereClause);
@@ -4162,8 +4178,10 @@ function updateInfoTable(features, FIELD) {
         const lv = await view.whenLayerView(featureForest);
         highlightForestSelect = lv.highlight(r.features);
 
+        console.log("Successfully highlighted polygon(s)");
+
       } catch (e) {
-        console.warn("highlightHistoricalPolygon failed", e);
+        console.error("highlightHistoricalPolygon failed", e);
       }
     }
 
