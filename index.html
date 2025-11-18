@@ -4439,7 +4439,6 @@ async function zoomToFeatureById(objectId) {
     await view.goTo(feat.geometry, { animate: true, zoom: 16 });
     const lv = await view.whenLayerView(featureLayer);
     if (highlightSelect) highlightSelect.remove();
-    if (window.forestHighlight) window.forestHighlight.remove(); // Add this line
     highlightSelect = lv.highlight(feat);
   } catch (e) { console.warn("zoomToFeatureById failed", e); }
 }
