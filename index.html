@@ -3962,6 +3962,9 @@ function closeFilterDropdown() {
   activeDropdown = null;
 }
 
+
+
+
 function applyFiltersAndRender(features = null) {
   const featuresToFilter = features || currentTableFeatures;
 
@@ -3996,10 +3999,38 @@ function applyFiltersAndRender(features = null) {
   updateSummary(filteredFeatures, currentTableFIELD);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function renderInfoTable(features, FIELD) {
   const tbody = document.getElementById('infoTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
+
+  // token to cancel previous searches
+  if (typeof window.currentForestSearchToken === 'undefined') {
+    window.currentForestSearchToken = 0;
+  }
+
+  // simple cache for F_H_P + year -> objectIds in forest layer
+  if (!window.forestSearchCache) {
+    window.forestSearchCache = {};
+  }
 
   if (!features.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">אין נתונים להצגה</td></tr>';
@@ -4007,8 +4038,104 @@ function renderInfoTable(features, FIELD) {
     return;
   }
 
+  // popup
+  let popup = document.getElementById('yearSearchPopup');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = 'yearSearchPopup';
+    popup.style.cssText = `
+      position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.9);
+      color: white;
+      padding: 14px 22px;
+      border-radius: 999px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
+      z-index: 10000;
+      display: none;
+      min-width: 220px;
+      text-align: center;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.25s ease;
+    `;
+    popup.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="font-size:11px;opacity:0.75;">חיפוש שכבת יער לפי שנה</div>
+        <div id="yearSearchValue" style="font-size:26px;font-weight:700;letter-spacing:1px;"></div>
+        <div id="yearSearchStatus" style="font-size:11px;opacity:0.8;"></div>
+      </div>
+    `;
+    document.body.appendChild(popup);
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #yearSearchPopup { pointer-events: none; }
+
+      @keyframes fadeOut {
+        0%   { opacity: 1; transform: translateY(0); }
+        70%  { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-12px); }
+      }
+      .fade-out-animation {
+        animation: fadeOut 1.4s ease forwards;
+      }
+
+      .selected-row {
+        background-color: rgba(37, 99, 235, 0.08) !important;
+      }
+      .selected-row td {
+        border-bottom-color: rgba(37, 99, 235, 0.25);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const yearDisplay   = popup.querySelector('#yearSearchValue');
+  const statusDisplay = popup.querySelector('#yearSearchStatus');
+
+  const hidePopup = () => {
+    popup.classList.add('fade-out-animation');
+    setTimeout(() => {
+      popup.style.display = 'none';
+      popup.style.background = 'rgba(17, 24, 39, 0.9)';
+      popup.classList.remove('fade-out-animation');
+    }, 1400);
+  };
+
+  const normalizeYear = (val) => {
+    if (val instanceof Date) return val.getFullYear();
+    if (typeof val === 'number') {
+      if (val > 10000) return new Date(val).getFullYear();
+      return val;
+    }
+    if (typeof val === 'string') {
+      const m = val.match(/(\d{4})/);
+      if (m) return Number(m[1]);
+    }
+    return null;
+  };
+
+  const getForestLayerView = async () => {
+    if (window.forestLayerView) return window.forestLayerView;
+    const lv = await view.whenLayerView(featureForest);
+    window.forestLayerView = lv;
+    return lv;
+  };
+
+  // important: wait until layerView is ready before highlight
+  const waitForLayerViewReady = async (layerView, maxWait = 5000) => {
+    const start = Date.now();
+    while (layerView.updating && (Date.now() - start) < maxWait) {
+      await new Promise(r => setTimeout(r, 80));
+    }
+  };
+
   features.forEach(f => {
-    const a = f.attributes;
+    const a  = f.attributes;
     const tr = document.createElement('tr');
     tr.className = 'clickable-row';
     tr.setAttribute('data-oid', a.OBJECTID);
@@ -4019,12 +4146,12 @@ function renderInfoTable(features, FIELD) {
     const forest = FIELD.forest ? (a[FIELD.forest] ?? '-') : '-';
     let area = '-';
     if (FIELD.area) {
-      const v = Number(a[FIELD.area]); 
+      const v = Number(a[FIELD.area]);
       area = isFinite(v) ? v.toFixed(1) : '-';
     }
 
-    const year = FIELD.year ? formatDateShort(a[FIELD.year]) : '-';
-    const et = FIELD.type ? (a[FIELD.type] ?? '-') : '-';
+    const yearText = FIELD.year ? formatDateShort(a[FIELD.year]) : '-';
+    const et       = FIELD.type ? (a[FIELD.type] ?? '-') : '-';
 
     tr.innerHTML = `
       <td class="highlight-number">${stand}</td>
@@ -4032,89 +4159,213 @@ function renderInfoTable(features, FIELD) {
       <td>${gush}</td>
       <td>${forest}</td>
       <td>${area}</td>
-      <td>${year}</td>
+      <td>${yearText}</td>
       <td>${et}</td>
     `;
 
-tr.onclick = async () => {
-  const panel = document.getElementById('infoPanel');
-  if (panel) panel.style.display = 'block';
-  
-  // Zoom to the feature
-  zoomToFeatureById(a.OBJECTID);
-  
-  // Debug: Log the field names and values
-  console.log("FIELD.fhp:", FIELD.fhp, "Value:", a[FIELD.fhp]);
-  console.log("FIELD.year:", FIELD.year, "Value:", a[FIELD.year]);
-  console.log("FIELD.forestFHP:", FIELD.forestFHP);
-  console.log("FIELD.forestYear:", FIELD.forestYear);
-  
-  // Check if we have F_H_P and year values
-  if (FIELD.fhp && FIELD.year && FIELD.forestFHP && FIELD.forestYear) {
-    const fhpValue = a[FIELD.fhp];
-    const yearValue = a[FIELD.year];
-    
-    console.log("FHP Value:", fhpValue, "Year Value:", yearValue);
-    
-    if (fhpValue && yearValue) {
-      // Extract year if it's a date
-      let year = yearValue;
-      if (yearValue instanceof Date) {
-        year = yearValue.getFullYear();
-      } else if (typeof yearValue === 'number' && yearValue > 10000) {
-        // Likely a timestamp
-        year = new Date(yearValue).getFullYear();
-      }
-      
-      // Build WHERE clause - handle both string and numeric F_H_P
-      let whereClause;
-      const forestFHPField = featureForest.fields?.find(f => f.name === FIELD.forestFHP);
-      
-      if (forestFHPField && ['integer', 'double', 'small-integer', 'big-integer', 'single', 'long', 'number', 'oid'].includes(forestFHPField.type)) {
-        // Numeric field
-        whereClause = `${FIELD.forestFHP} = ${fhpValue} AND ${FIELD.forestYear} = ${year}`;
-      } else {
-        // String field
-        whereClause = `${FIELD.forestFHP} = '${String(fhpValue).replace(/'/g, "''")}' AND ${FIELD.forestYear} = ${year}`;
-      }
-      
-      console.log("Forest query WHERE clause:", whereClause);
-      
-      // Query featureForest for matching F_H_P and year
-      try {
-        const forestQuery = await featureForest.queryFeatures({
-          where: whereClause,
-          returnGeometry: true,
-          outFields: ["OBJECTID", FIELD.forestFHP, FIELD.forestYear]
-        });
-        
-        console.log("Forest query results:", forestQuery.features.length, "features found");
-        
-        if (forestQuery.features.length > 0) {
-          // Highlight matching forest polygons
-          const forestLayerView = await view.whenLayerView(featureForest);
-          
-          // Remove previous highlight if exists
-          if (window.forestHighlight) {
-            window.forestHighlight.remove();
-          }
-          
-          // Highlight all matching forest features
-          window.forestHighlight = forestLayerView.highlight(forestQuery.features);
-          console.log("Forest polygons highlighted");
+    tr.onclick = async () => {
+      const panel = document.getElementById('infoPanel');
+      if (panel) panel.style.display = 'block';
+
+      const allRows = tbody.querySelectorAll('.clickable-row');
+      const alreadySelected = tr.dataset.selected === 'true';
+
+      // deselect all rows (including this one)
+      allRows.forEach(row => {
+        row.dataset.selected = 'false';
+        row.classList.remove('selected-row');
+      });
+
+      // if row was already selected -> this click is "unselect"
+      if (alreadySelected) {
+        if (window.forestHighlight) {
+          window.forestHighlight.remove();
+          window.forestHighlight = null;
         }
-      } catch (e) {
-        console.error("Failed to highlight forest polygons:", e);
+        popup.style.display = 'none';
+        popup.classList.remove('fade-out-animation');
+        return; // nothing more to do
       }
-    }
-  } else {
-    console.log("Missing required fields for forest highlighting");
-  }
-};
+
+      // from here: NEW selection
+      // bump token only for a new search
+      window.currentForestSearchToken += 1;
+      const myToken = window.currentForestSearchToken;
+
+      const stillMyTurn = () =>
+        myToken === window.currentForestSearchToken;
+
+      // mark this row as selected
+      tr.dataset.selected = 'true';
+      tr.classList.add('selected-row');
+
+      // clear previous highlight (from other row)
+      if (window.forestHighlight) {
+        window.forestHighlight.remove();
+        window.forestHighlight = null;
+      }
+
+      // zoom to stand point
+      zoomToFeatureById(a.OBJECTID);
+
+      if (!(FIELD.fhp && FIELD.year && FIELD.forestFHP && FIELD.forestYear)) {
+        console.log('Missing required fields for forest highlighting');
+        return;
+      }
+
+      const fhpValue  = a[FIELD.fhp];
+      const yearValue = a[FIELD.year];
+      if (!fhpValue || !yearValue) return;
+
+      let originalYear = normalizeYear(yearValue);
+      if (!originalYear) return;
+
+      const cacheKey = `${String(fhpValue).trim()}__${originalYear}`;
+
+      // popup base state
+      popup.style.display = 'block';
+      popup.classList.remove('fade-out-animation');
+      popup.style.background = 'rgba(17, 24, 39, 0.9)';
+      yearDisplay.textContent = originalYear;
+      statusDisplay.textContent = '';
+
+      const forestLayerView = await getForestLayerView();
+
+      // 1) try cache first
+      const cachedObjectIds = window.forestSearchCache[cacheKey];
+      if (Array.isArray(cachedObjectIds) && cachedObjectIds.length > 0) {
+        try {
+          await waitForLayerViewReady(forestLayerView);
+          await new Promise(r => setTimeout(r, 120));
+          if (!stillMyTurn()) return;
+
+          window.forestHighlight = forestLayerView.highlight(cachedObjectIds);
+
+          popup.style.background = 'rgba(82, 183, 136, 0.95)';
+          yearDisplay.textContent = `✓ ${originalYear}`;
+          statusDisplay.textContent = `נמצא (${cachedObjectIds.length})`;
+          setTimeout(hidePopup, 1200);
+          return;
+        } catch (err) {
+          console.error('highlight from cache failed', err);
+        }
+      }
+
+      const forestFHPField = featureForest.fields?.find(fld => fld.name === FIELD.forestFHP);
+      const isNumericFHP = forestFHPField && [
+        'integer', 'double', 'small-integer', 'big-integer',
+        'single', 'long', 'number', 'oid'
+      ].includes(forestFHPField.type);
+
+      const minYear   = 2007;
+      const startYear = originalYear >= minYear ? originalYear : minYear;
+      let found = false;
+
+      for (let currentYear = startYear; currentYear >= minYear; currentYear--) {
+        if (!stillMyTurn()) {
+          console.log('search stopped, user clicked something else');
+          return;
+        }
+
+        yearDisplay.textContent = currentYear;
+        statusDisplay.textContent = 'מחפש...';
+
+        let whereClause;
+        if (isNumericFHP) {
+          whereClause = `${FIELD.forestFHP} = ${fhpValue} AND ${FIELD.forestYear} = ${currentYear}`;
+        } else {
+          const safeFhp = String(fhpValue).replace(/'/g, "''");
+          whereClause = `${FIELD.forestFHP} = '${safeFhp}' AND ${FIELD.forestYear} = ${currentYear}`;
+        }
+
+        try {
+          const forestQuery = await featureForest.queryFeatures({
+            where: whereClause,
+            returnGeometry: true,
+            outFields: ['*']
+          });
+
+          if (!stillMyTurn()) {
+            console.log('ignore result, user clicked something else');
+            return;
+          }
+
+          if (forestQuery.features.length > 0) {
+            const validFeatures = forestQuery.features.filter(feat => {
+              const fhpAttr  = feat.attributes[FIELD.forestFHP];
+              const yearAttr = normalizeYear(feat.attributes[FIELD.forestYear]);
+              const fhpMatch  = String(fhpAttr).trim() === String(fhpValue).trim();
+              const yearMatch = yearAttr === currentYear;
+              return fhpMatch && yearMatch;
+            });
+
+            if (validFeatures.length > 0) {
+              const objectIds = validFeatures.map(ft => ft.attributes.OBJECTID);
+
+              popup.style.background = 'rgba(82, 183, 136, 0.95)';
+              yearDisplay.textContent = `✓ ${currentYear}`;
+              statusDisplay.textContent = `נמצא (${validFeatures.length})`;
+
+              try {
+                await waitForLayerViewReady(forestLayerView);
+                await new Promise(r => setTimeout(r, 120));
+                if (!stillMyTurn()) return;
+
+                window.forestHighlight = forestLayerView.highlight(objectIds);
+              } catch (err) {
+                console.error('highlight failed', err);
+              }
+
+              found = true;
+
+              // cache for the exact year we found
+              const exactKey = `${String(fhpValue).trim()}__${currentYear}`;
+              window.forestSearchCache[exactKey] = objectIds;
+
+              const displayDuration = currentYear === originalYear ? 1800 : 800;
+              setTimeout(hidePopup, displayDuration);
+              break;
+            }
+          }
+        } catch (e) {
+          console.error(`forest query failed for year ${currentYear}`, e);
+        }
+
+        if (!found && currentYear > minYear) {
+          statusDisplay.textContent = 'לא נמצא, ממשיך שנה אחורה...';
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!found && stillMyTurn()) {
+        yearDisplay.textContent = '✗';
+        statusDisplay.textContent = 'לא נמצא';
+        setTimeout(hidePopup, 700);
+      }
+    };
+
+
 
     tbody.appendChild(tr);
   });
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function updateInfoTable(features, FIELD) {
   currentTableFeatures = features;
