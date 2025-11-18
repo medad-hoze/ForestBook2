@@ -1119,22 +1119,21 @@
                 <div id="summaryInfo" class="summary-info"></div>
                 <table class="info-table">
                     <thead>
-                        <tr>
-                            <th data-column="stand" class="sortable-header" title="לחץ פעמיים למיון">
-                                עומד
-                                <span class="filter-icon" data-column="stand" title="לחץ לסינון">▼</span>
-                            </th>
-                            <th data-column="parcel" class="sortable-header" title="לחץ פעמיים למיון">
-                                חלקה
-                                <span class="filter-icon" data-column="parcel" title="לחץ לסינון">▼</span>
-                            </th>
-                            <th data-column="gush" class="sortable-header" title="לחץ פעמיים למיון">
+                        <tr>   <th data-column="gush" class="sortable-header" title="לחץ פעמיים למיון">
                                 גוש
                                 <span class="filter-icon" data-column="gush" title="לחץ לסינון">▼</span>
                             </th>
-                            <th data-column="forest" class="sortable-header" title="לחץ פעמיים למיון">
+                               <th data-column="forest" class="sortable-header" title="לחץ פעמיים למיון">
                                 יער
                                 <span class="filter-icon" data-column="forest" title="לחץ לסינון">▼</span>
+                            </th>
+                               <th data-column="parcel" class="sortable-header" title="לחץ פעמיים למיון">
+                                חלקה
+                                <span class="filter-icon" data-column="parcel" title="לחץ לסינון">▼</span>
+                            </th>
+                            <th data-column="stand" class="sortable-header" title="לחץ פעמיים למיון">
+                                עומד
+                                <span class="filter-icon" data-column="stand" title="לחץ לסינון">▼</span>
                             </th>
                             <th data-column="area" class="sortable-header" title="לחץ פעמיים למיון">
                                 שטח (דונם)
@@ -4154,10 +4153,10 @@ function renderInfoTable(features, FIELD) {
     const et       = FIELD.type ? (a[FIELD.type] ?? '-') : '-';
 
     tr.innerHTML = `
-      <td class="highlight-number">${stand}</td>
-      <td>${parcel}</td>
-      <td>${gush}</td>
+      <td class="highlight-number">${gush}</td>
       <td>${forest}</td>
+      <td>${parcel}</td>
+      <td class="highlight-number">${stand}</td>
       <td>${area}</td>
       <td>${yearText}</td>
       <td>${et}</td>
@@ -4503,5 +4502,6 @@ async function zoomToFeatureById(objectId) {
 
   });
 </script>
+
 
 
