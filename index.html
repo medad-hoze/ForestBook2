@@ -4204,8 +4204,8 @@ function renderInfoTable(features, FIELD) {
         window.forestHighlight = null;
       }
 
-      // zoom to stand point
-      zoomToFeatureById(a.OBJECTID);
+      // zoom to stand point - wait for zoom to complete before checking polygon
+      await zoomToFeatureById(a.OBJECTID);
 
       if (!(FIELD.fhp && FIELD.year && FIELD.forestFHP && FIELD.forestYear)) {
         console.log('Missing required fields for forest highlighting');
