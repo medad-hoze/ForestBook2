@@ -259,7 +259,7 @@
         
         .legend-control {
             position: absolute;
-            top: 90px;
+            top: 125px;
             left: 15px;
             background: white;
             border-radius: 12px;
@@ -4002,31 +4002,15 @@ function applyFiltersAndRender(features = null) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function renderInfoTable(features, FIELD) {
   const tbody = document.getElementById('infoTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  // token to cancel previous searches
   if (typeof window.currentForestSearchToken === 'undefined') {
     window.currentForestSearchToken = 0;
   }
 
-  // simple cache for F_H_P + year -> objectIds in forest layer
   if (!window.forestSearchCache) {
     window.forestSearchCache = {};
   }
@@ -4502,6 +4486,7 @@ async function zoomToFeatureById(objectId) {
 
   });
 </script>
+
 
 
 
